@@ -21,8 +21,8 @@ function run() {
   assert.strictEqual(system.sync.script_path, "tools/sync_stock_bundle.mjs");
 
   assert.ok(exists(system.app.web_root), "web_root does not exist");
-  assert.ok(exists(system.app.price_bundle_path), "price bundle path does not exist");
-  assert.ok(exists(system.app.stock_bundle_path), "stock bundle path does not exist");
+  assert.ok(!exists(system.app.price_bundle_path), "remote-only mode should not keep local price bundle");
+  assert.ok(!exists(system.app.stock_bundle_path), "remote-only mode should not keep local stock bundle");
   assert.ok(exists("apps/v9/runtime-config.js"), "runtime stock config should exist");
   assert.ok(exists(system.sync.script_path), "sync script path does not exist");
   assert.ok(exists("tools/sync_price_bundle.mjs"), "price sync tool should exist");

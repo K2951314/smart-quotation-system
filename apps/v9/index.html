@@ -130,21 +130,14 @@
     let STOCK_SOURCE = "未加载";
     let DB = {};
     let g_Results = [];
-    let g_PriceReady = false;
-    let g_PriceLoadingPromise = null;
+    let g_DataReady = false;
+    let g_DataLoadingPromise = null;
 
     const MMC_URL = "https://mcweb.mitsubishi-materials.com/concerto-mmsc-ec/login.jsp";
     const MMC_PASSWORD = "%461971#";
 
     window.onload = async function() {
-        try {
-            await loadStockBundle();
-            rebuildMergedDB();
-            setStatus("库存已加载，等待查询", "ok");
-        } catch (err) {
-            setStatus("库存加载失败", "error");
-            showToast(err.message || "加载失败");
-        }
+        await ensureDataLoaded();
     };
 
     function setStatus(msg, type) {
@@ -159,9 +152,9 @@
       const btn = document.getElementById("btnSearch");
       const regexBtn = document.getElementById("btnRegexConvert");
       if (!btn) return;
-      if (loading) {
+        if (loading) {
         if (!btn.dataset.defaultText) btn.dataset.defaultText = btn.textContent;
-        btn.textContent = "加载价格数据中...";
+        btn.textContent = "加载远程数据中...";
         btn.disabled = true;
         if (regexBtn) regexBtn.disabled = true;
       } else {
@@ -259,7 +252,7 @@
     }
 
     async function parsePriceBundle(priceObj) {
-      if (!priceObj) throw new Error("未找到 price.bundle.js");
+      if (!priceObj) throw new Error("未找到远程价格包");
       let jsonText = "";
 
       if (priceObj.secured) {
@@ -283,7 +276,7 @@
     }
 
     function parseStockBundle(stockObj) {
-      if (!stockObj) throw new Error("未找到 stock.bundle.js");
+      if (!stockObj) throw new Error("未找到远程库存包");
       if (stockObj.secured) throw new Error("库存包必须保持明文");
       const text = decodePlainPayload(stockObj.payload || "");
       const parsed = JSON.parse(text || "{}");
@@ -364,64 +357,40 @@
       return loadPriceBundleByScript(bundleUrl, cfg.timeoutMs);
     }
 
-    async function loadLocalPriceFallback() {
-      return loadPriceBundleByScript("price.bundle.js", 8000);
+    async function loadRemoteStockBundle() {
+      const cfg = getRemoteStockConfig();
+      if (!cfg.enabled || !cfg.url) throw new Error("未配置远程库存地址");
+      return loadStockBundleByScript(withCacheBust(cfg.url, cfg.cacheBust), cfg.timeoutMs);
     }
 
-    async function ensurePriceLoaded() {
-      if (g_PriceReady) return true;
-      if (g_PriceLoadingPromise) return g_PriceLoadingPromise;
+    async function ensureDataLoaded() {
+      if (g_DataReady) return true;
+      if (g_DataLoadingPromise) return g_DataLoadingPromise;
 
-      g_PriceLoadingPromise = (async () => {
+      g_DataLoadingPromise = (async () => {
         setSearchLoading(true);
         try {
-          const cfg = getRemotePriceConfig();
-          if (cfg.enabled && cfg.manifestUrl) {
-            try {
-              const remote = await loadRemotePriceFromManifest();
-              applyPriceDataset(remote, "远程(manifest)");
-            } catch (err) {
-              showToast("远程价格失败，已回退本地");
-              const localFallback = await loadLocalPriceFallback();
-              applyPriceDataset(localFallback, "本地(回退)");
-            }
-          } else {
-            const localOnly = await loadLocalPriceFallback();
-            applyPriceDataset(localOnly, "本地");
-          }
-
-          g_PriceReady = true;
+          const [remotePrice, remoteStock] = await Promise.all([
+            loadRemotePriceFromManifest(),
+            loadRemoteStockBundle()
+          ]);
+          applyPriceDataset(remotePrice, "远程(manifest)");
+          applyStockDataset(remoteStock, "远程(stock-data)");
           rebuildMergedDB();
+          g_DataReady = true;
           setStatus("数据已加载", "ok");
           return true;
         } catch (err) {
-          setStatus("价格数据加载失败", "error");
-          showToast(err.message || "价格数据加载失败");
+          setStatus("远程数据加载失败", "error");
+          showToast(err.message || "远程数据加载失败");
           return false;
         } finally {
           setSearchLoading(false);
-          g_PriceLoadingPromise = null;
+          g_DataLoadingPromise = null;
         }
       })();
 
-      return g_PriceLoadingPromise;
-    }
-
-    async function loadStockBundle() {
-      const cfg = getRemoteStockConfig();
-      if (cfg.enabled && cfg.url) {
-        try {
-          const remote = await loadStockBundleByScript(withCacheBust(cfg.url, cfg.cacheBust), cfg.timeoutMs);
-          applyStockDataset(remote, "远程(stock-data)");
-          return;
-        } catch (err) {
-          showToast("远程库存失败，已回退本地");
-        }
-      }
-
-      const local = await loadStockBundleByScript("stock.bundle.js", 8000);
-      const source = (cfg.enabled && cfg.url) ? "本地(回退)" : "本地(自动同步)";
-      applyStockDataset(local, source);
+      return g_DataLoadingPromise;
     }
 
     function rebuildMergedDB() {
@@ -542,7 +511,7 @@
     }
 
     async function doSearch() {
-        const ready = await ensurePriceLoaded();
+        const ready = await ensureDataLoaded();
         if (!ready) return;
 
         const lines = getQueryLines();
@@ -562,7 +531,7 @@
     }
 
     async function doRegexSearchConverted() {
-        const ready = await ensurePriceLoaded();
+        const ready = await ensureDataLoaded();
         if (!ready) return;
 
         const lines = getQueryLines();

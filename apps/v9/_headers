@@ -8,9 +8,3 @@
 
 /runtime-config.js
   Cache-Control: public, max-age=300, stale-while-revalidate=60
-
-/price.bundle.js
-  Cache-Control: public, max-age=0, must-revalidate
-
-/stock.bundle.js
-  Cache-Control: public, max-age=0, must-revalidate

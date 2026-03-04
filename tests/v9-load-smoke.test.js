@@ -17,9 +17,11 @@ function run() {
   assert.ok(!html.includes('id="stockBundleUrl"'), "v9 index should not expose stock URL input");
   assert.ok(!html.includes("applyStockSource"), "v9 index should not expose remote stock apply action");
   assert.ok(html.includes("loadStockBundleByScript"), "v9 index should include dynamic stock script loader");
-  assert.ok(html.includes("ensurePriceLoaded"), "v9 index should lazy-load price before query");
+  assert.ok(html.includes("ensureDataLoaded"), "v9 index should initialize remote data load at startup");
+  assert.ok(!html.includes("ensurePriceLoaded"), "v9 index should not use query-time price lazy load");
   assert.ok(html.includes("loadRemotePriceFromManifest"), "v9 index should support remote price manifest loading");
-  assert.ok(html.includes("loadLocalPriceFallback"), "v9 index should support local price fallback");
+  assert.ok(!html.includes("loadLocalPriceFallback"), "v9 index should not keep local price fallback");
+  assert.ok(!html.includes("stock.bundle.js"), "v9 index should not keep local stock fallback");
 }
 
 try {

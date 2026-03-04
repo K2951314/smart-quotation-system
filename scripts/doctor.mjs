@@ -22,8 +22,6 @@ function run() {
   readJson("config/price-source.schema.json");
 
   assertExists(system.app.web_root);
-  assertExists(system.app.price_bundle_path);
-  assertExists(system.app.stock_bundle_path);
   assertExists(system.sync.script_path);
   assertExists("tools/sync_price_bundle.mjs");
   assertExists("merger/lib/data-utils.js");

@@ -7,8 +7,9 @@ function run() {
   const runtimeConfig = fs.readFileSync(path.join(process.cwd(), "apps/v9/runtime-config.js"), "utf8");
 
   assert.ok(html.includes("loadRemotePriceFromManifest"), "should include remote price manifest loader");
-  assert.ok(html.includes("loadLocalPriceFallback"), "should include local price fallback loader");
-  assert.ok(html.includes("远程价格失败，已回退本地"), "should notify fallback when remote price fails");
+  assert.ok(!html.includes("loadLocalPriceFallback"), "remote-only mode should remove local price fallback");
+  assert.ok(!html.includes("price.bundle.js"), "remote-only mode should not reference local price bundle");
+  assert.ok(html.includes("远程数据加载失败"), "page should show explicit remote-only load failure");
 
   assert.ok(runtimeConfig.includes("remotePrice"), "runtime config should define remotePrice section");
   assert.ok(runtimeConfig.includes("price-manifest.json"), "remotePrice should point to manifest URL");
