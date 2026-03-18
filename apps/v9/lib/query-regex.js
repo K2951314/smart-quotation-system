@@ -40,9 +40,14 @@
     );
   }
 
+  function hasStockValue(stockText) {
+    return !!toStringSafe(stockText).trim();
+  }
+
   return {
     escapeRegexLiteral: escapeRegexLiteral,
     convertPlainLineToRegex: convertPlainLineToRegex,
     matchRegexTarget: matchRegexTarget,
+    hasStockValue: hasStockValue,
   };
 });

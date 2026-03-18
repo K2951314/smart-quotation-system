@@ -23,6 +23,8 @@ function run() {
 
   const remarkOnly = QueryRegex.convertPlainLineToRegex("H7-123");
   assert.strictEqual(QueryRegex.matchRegexTarget("spec", "code", "Remark H7-123", remarkOnly), true);
+  assert.strictEqual(QueryRegex.hasStockValue("A仓:12"), true);
+  assert.strictEqual(QueryRegex.hasStockValue("   "), false);
 }
 
 try {
