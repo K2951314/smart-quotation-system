@@ -1,694 +1,123 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>智能查价系统 v9</title>
-<style>
-    body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; color: #333; }
-    .container { max-width: 1240px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); min-height: 90vh; }
-    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f0f0f0; padding-bottom: 15px; margin-bottom: 10px; }
-    .header h2 { margin: 0; color: #1a73e8; }
-    .status-badge { font-size: 12px; padding: 4px 8px; border-radius: 4px; background: #eee; color: #666; }
-    .status-badge.ok { background: #e6f4ea; color: #1e8e3e; }
-    .status-badge.lock { background: #fff3e0; color: #e65100; cursor: pointer; }
-    .versions { font-size: 12px; color: #64748b; margin-bottom: 14px; }
-
-    .panel { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e0e0e0; }
-    .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
-    .group { flex: 1; min-width: 120px; }
-    label { display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #555; }
-    input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
-
-    .btn { flex: 1; padding: 10px; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; min-width: 90px; }
-    .btn-search { background: #1a73e8; }
-    .btn-search:hover { background: #1557b0; }
-    .btn-regex { background: #0f766e; }
-    .btn-regex:hover { background: #0b5f59; }
-    .btn-copy { background: #f59e0b; }
-    .btn-copy:hover { background: #d97706; }
-
-    .copy-opts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee; }
-    .opt-lbl { background: white; border: 1px solid #ddd; padding: 4px 10px; border-radius: 20px; font-size: 12px; display: flex; align-items: center; cursor: pointer; user-select: none; }
-    .opt-lbl:hover { border-color: #1a73e8; }
-    .opt-lbl input { width: auto; margin-right: 5px; }
-
-    .main { display: flex; gap: 20px; }
-    .left { width: 390px; flex-shrink: 0; }
-    .right { flex-grow: 1; overflow-x: auto; position: relative; }
-
-    textarea { width: 100%; height: 200px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-family: monospace; resize: vertical; box-sizing: border-box; }
-
-    table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; white-space: nowrap; }
-    th { background: #f1f3f4; padding: 9px 8px; text-align: left; position: sticky; top: 0; z-index: 10; border-bottom: 2px solid #ddd; }
-    td { padding: 6px 8px; border-bottom: 1px solid #eee; }
-    tr.match-exact { background-color: #e8f0fe; }
-    tr:hover { background-color: #f8f9fa; }
-    .col-check { width: 44px; min-width: 44px; text-align: center; }
-    .col-check input[type="checkbox"] { width: auto; display: block; margin: 0 auto; }
-    .sticky-check { position: sticky; left: 0; z-index: 14; background: rgba(255,255,255,0.98); }
-    th.sticky-check { z-index: 20; }
-    tr.match-exact .sticky-check { background: rgba(232,240,254,0.98); }
-    .result-meta td { padding-top: 6px; padding-bottom: 2px; border-bottom: none; }
-    .result-main td { padding-top: 2px; padding-bottom: 7px; }
-    .result-meta .sticky-check { border-bottom: 1px solid #eee; }
-    .meta-cell { white-space: nowrap; font-size: 12px; line-height: 1.25; color: #334155; overflow: hidden; }
-    .meta-line { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
-    .meta-item { min-width: 0; }
-    .meta-value { #111827; }
-    .meta-spec .meta-value {#111827; font-weight: 400; }
-    tr.match-exact .meta-spec .meta-value { color: #111827; }
-    .meta-stock .meta-value { color: #188038; }
-    .main-header { min-width: 78px; }
-    .col-face, .face-cell { width: 72px; min-width: 72px; }
-    .col-discount, .discount-cell-wrap { width: 72px; min-width: 72px; }
-    .col-deal, .deal-cell { width:72px; min-width: 72px; }
-    .col-remark, .remark { min-width: 140px; }
-    .remark { color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
-
-    .price { color: #d93025; font-weight: bold; }
-    .stock { color: #188038; font-size: 12px; }
-
-    .mmc-btn { background: #d32f2f; color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
-    .mmc-btn:hover { background: #b71c1c; }
-
-    .discount-cell { display: flex; align-items: center; gap:2px; }
-    .discount-input { width: 59px; padding: 3px 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
-    .discount-suffix { color: #666; font-size: 12px; }
-
-    #toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 4px; display: none; z-index: 2000; }
-
-    @media (max-width: 768px) {
-      .main { flex-direction: column; }
-      .left { width: 100%; }
-      textarea { height: 100px; }
-      .meta-cell { font-size: 10px; }
-      .meta-line { gap: 4px 8px; }
-      .main-header { min-width: 70px; }
-      .col-face, .face-cell { width: 59px; min-width: 59px; }
-      .col-discount, .discount-cell-wrap { width: 59px; min-width: 59px; }
-      .col-deal, .deal-cell { width: 59px; min-width: 59px; }
-      .col-remark, .remark { min-width: 110px; }
-      .discount-input { width: 44px; }
-      .remark { max-width: 160px; }
-    }
-</style>
+<link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-<div id="toast">已复制</div>
+<div id="toast" class="toast">已复制</div>
 
-<div class="container">
-    <div class="header">
-        <h2>智能查价系统 v9</h2>
-        <div id="status" class="status-badge">等待数据...</div>
+<div class="shell">
+  <header class="masthead">
+    <p class="eyebrow">Industrial Pricing Console</p>
+    <div class="brand-row">
+      <div>
+        <h1>智能查价系统 v9</h1>
+        <p class="subline">远程价格与库存双源工作台。查询、库存过滤、折扣调整都在同一屏完成，不再依赖查询前输入起始折扣。</p>
+      </div>
+      <div id="status" class="status-badge info">等待数据...</div>
     </div>
-    <div id="versions" class="versions">价格版本: - | 库存版本: -</div>
+    <div id="versions" class="version-bar">价格版本: - | 库存版本: -</div>
+  </header>
 
-    <div class="panel">
-        <div class="controls">
-            <div class="group"><label>折扣</label><input type="number" id="discount" value="0.53" step="0.01"></div>
-            <div class="group"><label>小数位</label><input type="number" id="decimals" value="1" step="1"></div>
-            <div class="group"><label>取整阈值</label><input type="number" id="threshold" value="100" step="1"></div>
-            <button id="btnSearch" class="btn btn-search" onclick="doSearch()">智能匹配</button>
-            <button id="btnRegexConvert" class="btn btn-regex" onclick="doRegexSearchConverted()">库存查询</button>
-            <button class="btn btn-copy" onclick="doCopy()">复制勾选</button>
+  <section class="toolbar" aria-label="查询控制台">
+    <div class="toolbar-main">
+      <div class="field-group">
+        <label for="discountStep">步长</label>
+        <div class="field-shell">
+          <input type="number" id="discountStep" value="0.01" step="0.01" min="0.01">
+          <span class="field-unit">百分点</span>
         </div>
+        <div class="step-presets">
+          <button type="button" class="step-preset is-active" data-step="0.01" onclick="setDiscountStepPreset(this)">0.01</button>
+          <button type="button" class="step-preset" data-step="0.1" onclick="setDiscountStepPreset(this)">0.1</button>
+          <button type="button" class="step-preset" data-step="0.5" onclick="setDiscountStepPreset(this)">0.5</button>
+        </div>
+      </div>
 
-        <div class="copy-opts">
-            <label class="opt-lbl"><input type="checkbox" id="chk_code" checked>代码</label>
-            <label class="opt-lbl"><input type="checkbox" id="chk_spec" checked>规格</label>
-            <label class="opt-lbl"><input type="checkbox" id="chk_price" checked>含税价</label>
-            <label class="opt-lbl"><input type="checkbox" id="chk_special">特价信息</label>
-            <label class="opt-lbl"><input type="checkbox" id="chk_stock">库存信息</label>
-            <label class="opt-lbl" style="background:#fffbf0;border-color:#ffeeba"><input type="checkbox" id="chk_remark">补充说明</label>
-            <button class="mmc-btn" onclick="openMmcLogin()">三菱库存</button>
+      <div class="field-group">
+        <label for="decimals">小数位</label>
+        <div class="field-shell">
+          <input type="number" id="decimals" value="1" step="1">
         </div>
+      </div>
+
+      <div class="field-group">
+        <label for="threshold">取整阈值</label>
+        <div class="field-shell">
+          <input type="number" id="threshold" value="100" step="1">
+        </div>
+      </div>
+
+      <div class="toolbar-actions">
+        <button id="btnSearch" class="btn btn-search" onclick="doSearch()">智能匹配</button>
+        <button id="btnRegexConvert" class="btn btn-regex" onclick="doRegexSearchConverted()">库存查询</button>
+        <button class="btn btn-copy" onclick="doCopy()">复制勾选</button>
+      </div>
     </div>
 
-    <div class="main">
-        <div class="left">
-            <textarea id="queryInput" placeholder="请输入规格型号...&#10;支持多关键词，例如：&#10;WNMG080408 UC5115"></textarea>
-        </div>
-        <div class="right">
-            <table>
-                <thead>
-                    <tr>
-                        <th class="col-check sticky-check"><input type="checkbox" onchange="toggleAll(this)"></th>
-                        <th class="col-discount">折扣</th>
-                        <th class="col-deal">折后价</th>
-                        <th class="col-remark">备注</th>
-                    </tr>
-                </thead>
-                <tbody id="resultBody"></tbody>
-            </table>
-        </div>
+    <div class="toolbar-copy">
+      <span class="copy-title">复制字段</span>
+      <label class="opt-lbl"><input type="checkbox" id="chk_code" checked>代码</label>
+      <label class="opt-lbl"><input type="checkbox" id="chk_spec" checked>规格</label>
+      <label class="opt-lbl"><input type="checkbox" id="chk_price" checked>含税价</label>
+      <label class="opt-lbl"><input type="checkbox" id="chk_special">特价信息</label>
+      <label class="opt-lbl"><input type="checkbox" id="chk_stock">库存信息</label>
+      <label class="opt-lbl is-accent"><input type="checkbox" id="chk_remark">补充说明</label>
+      <button class="mmc-btn" onclick="openMmcLogin()">三菱库存</button>
     </div>
+  </section>
+
+  <main class="workspace">
+    <section class="query-panel">
+      <div class="section-head">
+        <div>
+          <div class="panel-kicker">Query</div>
+          <h2>输入规格与关键字</h2>
+          <p>每行一条。智能匹配与库存查询都支持代码、规格型号、名称、助记码、补充说明、别名、特价等字段。</p>
+        </div>
+      </div>
+      <textarea id="queryInput" class="query-input" placeholder="请输入规格型号...&#10;支持多关键词，例如：&#10;WNMG080408 UC5115"></textarea>
+      <div class="query-note">
+        <div>默认折扣优先级：EX活动 32% → OSG 36% → 刀具 53% → 普通商品 53%</div>
+        <div>单击折扣左右按钮增减一次；按住约 280ms 后会按当前步长连续增减，松开立即停止。</div>
+      </div>
+    </section>
+
+    <section class="result-panel">
+      <div class="result-panel-header">
+        <div class="section-head section-head-compact">
+          <div>
+            <div class="panel-kicker">Result</div>
+            <h2>结果工作台</h2>
+            <p>逐行查看面价、库存、名称、助记码、别名、特价与备注，并用左右按钮微调折扣。</p>
+          </div>
+        </div>
+        <div class="result-count"><strong id="resultCount">0</strong><span>条结果</span></div>
+      </div>
+
+      <div class="results-shell">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-check sticky-check"><input type="checkbox" onchange="toggleAll(this)"></th>
+              <th class="col-discount">折扣</th>
+              <th class="col-deal">折后价</th>
+              <th class="col-remark">备注</th>
+            </tr>
+          </thead>
+          <tbody id="resultBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
 </div>
 
 <script src="./lib/query-regex.js"></script>
+<script src="./lib/discount-utils.js"></script>
 <script src="runtime-config.js"></script>
-<script>
-    let PRICE_DATA = { bySpec: {} };
-    let STOCK_DATA = { byCode: {} };
-    let PRICE_META = null;
-    let STOCK_META = null;
-    let PRICE_SOURCE = "未加载";
-    let STOCK_SOURCE = "未加载";
-    let DB = {};
-    let g_Results = [];
-    let g_DataReady = false;
-    let g_DataLoadingPromise = null;
-
-    const MMC_URL = "https://mcweb.mitsubishi-materials.com/concerto-mmsc-ec/login.jsp";
-    const MMC_PASSWORD = "%461971#";
-
-    window.onload = async function() {
-        await ensureDataLoaded();
-    };
-
-    function setStatus(msg, type) {
-        const el = document.getElementById('status');
-        el.innerText = msg;
-        el.className = 'status-badge ' + type;
-        if(type === 'error') el.style.background = '#ffcdd2';
-        else el.style.background = "";
-    }
-
-    function setSearchLoading(loading) {
-      const btn = document.getElementById("btnSearch");
-      const regexBtn = document.getElementById("btnRegexConvert");
-      if (!btn) return;
-        if (loading) {
-        if (!btn.dataset.defaultText) btn.dataset.defaultText = btn.textContent;
-        btn.textContent = "加载远程数据中...";
-        btn.disabled = true;
-        if (regexBtn) regexBtn.disabled = true;
-      } else {
-        btn.textContent = btn.dataset.defaultText || "智能匹配";
-        btn.disabled = false;
-        if (regexBtn) regexBtn.disabled = false;
-      }
-    }
-
-    function bytesToUtf8(bytes) {
-        return new TextDecoder().decode(bytes);
-    }
-
-    function base64ToBytes(base64) {
-        const raw = atob(base64);
-        const out = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-        return out;
-    }
-
-    function decodePlainPayload(payload) {
-        return bytesToUtf8(base64ToBytes(payload));
-    }
-
-    async function decryptData(base64Data, password) {
-        const encryptedData = base64ToBytes(base64Data);
-        const salt = encryptedData.slice(0, 16);
-        const iv = encryptedData.slice(16, 28);
-        const data = encryptedData.slice(28);
-
-        const enc = new TextEncoder();
-        const keyMaterial = await window.crypto.subtle.importKey(
-            "raw", enc.encode(password), {name: "PBKDF2"}, false, ["deriveKey"]
-        );
-        const key = await window.crypto.subtle.deriveKey(
-            { "name": "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
-            keyMaterial, { "name": "AES-GCM", "length": 256 }, false, ["decrypt"]
-        );
-
-        const decrypted = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, key, data);
-        return new TextDecoder().decode(decrypted);
-    }
-
-    function withCacheBust(url, cacheMode) {
-      const mode = String(cacheMode || "hourly").toLowerCase();
-      const now = new Date();
-      let key = String(now.getTime());
-      if (mode === "hourly") {
-        key = now.toISOString().slice(0, 13).replace(/[-:T]/g, "");
-      } else if (mode === "daily") {
-        key = now.toISOString().slice(0, 10).replace(/-/g, "");
-      }
-      const sep = url.includes("?") ? "&" : "?";
-      return url + sep + "v=" + encodeURIComponent(key);
-    }
-
-    function loadWindowBundleByScript(url, timeoutMs, globalKey, timeoutErr, loadErr) {
-      const previous = window[globalKey];
-      return new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-        let done = false;
-        const timer = setTimeout(() => {
-          if (done) return;
-          done = true;
-          script.remove();
-          window[globalKey] = previous;
-          reject(new Error(timeoutErr));
-        }, timeoutMs);
-
-        delete window[globalKey];
-        script.src = url;
-        script.async = true;
-        script.onload = () => {
-          if (done) return;
-          done = true;
-          clearTimeout(timer);
-          const bundle = window[globalKey];
-          if (!bundle) {
-            window[globalKey] = previous;
-            reject(new Error(loadErr));
-            return;
-          }
-          resolve(bundle);
-        };
-        script.onerror = () => {
-          if (done) return;
-          done = true;
-          clearTimeout(timer);
-          script.remove();
-          window[globalKey] = previous;
-          reject(new Error(loadErr));
-        };
-        document.head.appendChild(script);
-      });
-    }
-
-    async function parsePriceBundle(priceObj) {
-      if (!priceObj) throw new Error("未找到远程价格包");
-      let jsonText = "";
-
-      if (priceObj.secured) {
-        setStatus("价格包已加密，请输入密码", "lock");
-        const pwd = prompt("请输入价格包密码：");
-        if (!pwd) throw new Error("未输入价格包密码");
-        try {
-          jsonText = await decryptData(priceObj.payload, pwd);
-        } catch (err) {
-          throw new Error("价格包解密失败，请确认密码");
-        }
-      } else {
-        jsonText = decodePlainPayload(priceObj.payload || "");
-      }
-
-      const parsed = JSON.parse(jsonText || "{}");
-      return {
-        bySpec: parsed.bySpec || {},
-        meta: priceObj.meta || null
-      };
-    }
-
-    function parseStockBundle(stockObj) {
-      if (!stockObj) throw new Error("未找到远程库存包");
-      if (stockObj.secured) throw new Error("库存包必须保持明文");
-      const text = decodePlainPayload(stockObj.payload || "");
-      const parsed = JSON.parse(text || "{}");
-      return {
-        byCode: parsed.byCode || {},
-        meta: stockObj.meta || null
-      };
-    }
-
-    function getRemotePriceConfig() {
-      const cfg = (window.APP_CONFIG && window.APP_CONFIG.remotePrice) || {};
-      return {
-        enabled: !!cfg.enabled,
-        manifestUrl: String(cfg.manifestUrl || "").trim(),
-        timeoutMs: Number(cfg.timeoutMs) > 0 ? Number(cfg.timeoutMs) : 8000,
-        cacheBust: String(cfg.cacheBust || "daily")
-      };
-    }
-
-    function getRemoteStockConfig() {
-      const cfg = (window.APP_CONFIG && window.APP_CONFIG.remoteStock) || {};
-      return {
-        enabled: !!cfg.enabled,
-        url: String(cfg.url || "").trim(),
-        timeoutMs: Number(cfg.timeoutMs) > 0 ? Number(cfg.timeoutMs) : 8000,
-        cacheBust: String(cfg.cacheBust || "daily")
-      };
-    }
-
-    function applyPriceDataset(parsed, source) {
-      PRICE_DATA = { bySpec: parsed.bySpec || {} };
-      PRICE_META = parsed.meta || null;
-      PRICE_SOURCE = source;
-      updateVersionText();
-    }
-
-    function applyStockDataset(parsed, source) {
-      STOCK_DATA = { byCode: parsed.byCode || {} };
-      STOCK_META = parsed.meta || null;
-      STOCK_SOURCE = source;
-      updateVersionText();
-    }
-
-    async function loadPriceBundleByScript(url, timeoutMs) {
-      const priceObj = await loadWindowBundleByScript(
-        url,
-        timeoutMs,
-        "PRICE_BUNDLE",
-        "远程价格加载超时",
-        "远程价格脚本加载失败"
-      );
-      return parsePriceBundle(priceObj);
-    }
-
-    async function loadStockBundleByScript(url, timeoutMs) {
-      const stockObj = await loadWindowBundleByScript(
-        url,
-        timeoutMs,
-        "STOCK_BUNDLE",
-        "远程库存加载超时",
-        "远程库存脚本加载失败"
-      );
-      return parseStockBundle(stockObj);
-    }
-
-    async function loadRemotePriceFromManifest() {
-      const cfg = getRemotePriceConfig();
-      if (!cfg.enabled || !cfg.manifestUrl) throw new Error("未配置远程价格清单");
-
-      const manifestResp = await fetch(withCacheBust(cfg.manifestUrl, cfg.cacheBust), { cache: "no-store" });
-      if (!manifestResp.ok) throw new Error("远程价格清单加载失败 HTTP " + manifestResp.status);
-
-      const manifest = await manifestResp.json();
-      const latest = String((manifest && manifest.latest) || "").trim();
-      if (!latest) throw new Error("远程价格清单缺少 latest 字段");
-
-      const bundleUrl = new URL(latest, cfg.manifestUrl).href;
-      return loadPriceBundleByScript(bundleUrl, cfg.timeoutMs);
-    }
-
-    async function loadRemoteStockBundle() {
-      const cfg = getRemoteStockConfig();
-      if (!cfg.enabled || !cfg.url) throw new Error("未配置远程库存地址");
-      return loadStockBundleByScript(withCacheBust(cfg.url, cfg.cacheBust), cfg.timeoutMs);
-    }
-
-    async function ensureDataLoaded() {
-      if (g_DataReady) return true;
-      if (g_DataLoadingPromise) return g_DataLoadingPromise;
-
-      g_DataLoadingPromise = (async () => {
-        setSearchLoading(true);
-        try {
-          const [remotePrice, remoteStock] = await Promise.all([
-            loadRemotePriceFromManifest(),
-            loadRemoteStockBundle()
-          ]);
-          applyPriceDataset(remotePrice, "远程(manifest)");
-          applyStockDataset(remoteStock, "远程(stock-data)");
-          rebuildMergedDB();
-          g_DataReady = true;
-          setStatus("数据已加载", "ok");
-          return true;
-        } catch (err) {
-          setStatus("远程数据加载失败", "error");
-          showToast(err.message || "远程数据加载失败");
-          return false;
-        } finally {
-          setSearchLoading(false);
-          g_DataLoadingPromise = null;
-        }
-      })();
-
-      return g_DataLoadingPromise;
-    }
-
-    function rebuildMergedDB() {
-      DB = {};
-      const bySpec = PRICE_DATA.bySpec || {};
-      const byCode = STOCK_DATA.byCode || {};
-
-      Object.keys(bySpec).forEach(spec => {
-          const item = bySpec[spec] || {};
-          const code = item.c || "";
-          DB[spec] = {
-              c: code,
-              p: Number(item.p) || 0,
-              s: item.s || "",
-              r: item.r || "",
-              b: item.b || "",
-              i: byCode[code] || ""
-          };
-      });
-    }
-
-    function updateVersionText() {
-      const pVer = (PRICE_META && PRICE_META.version) ? PRICE_META.version : "-";
-      const sVer = (STOCK_META && STOCK_META.version) ? STOCK_META.version : "-";
-      const pSrc = PRICE_SOURCE || "未加载";
-      const sSrc = STOCK_SOURCE || "未加载";
-      document.getElementById("versions").textContent =
-        "价格版本: " + pVer + " | 价格来源: " + pSrc + " | 库存版本: " + sVer + " | 库存来源: " + sSrc;
-    }
-
-    function getQueryLines() {
-        const text = document.getElementById('queryInput').value;
-        return text.split(/\r?\n/).filter(l => l.trim());
-    }
-
-    function hasStockValue(text) {
-        if (!window.QueryRegex || typeof window.QueryRegex.hasStockValue !== "function") {
-            return !!String(text || "").trim();
-        }
-        return window.QueryRegex.hasStockValue(text);
-    }
-
-    function escapeRegexLiteral(text) {
-        if (!window.QueryRegex || typeof window.QueryRegex.escapeRegexLiteral !== "function") {
-            throw new Error("正则模块未加载");
-        }
-        return window.QueryRegex.escapeRegexLiteral(text);
-    }
-
-    function convertPlainLineToRegex(line) {
-        if (!window.QueryRegex || typeof window.QueryRegex.convertPlainLineToRegex !== "function") {
-            throw new Error("正则模块未加载");
-        }
-        return window.QueryRegex.convertPlainLineToRegex(line);
-    }
-
-    function matchRegexTarget(spec, code, remark, re) {
-        if (!window.QueryRegex || typeof window.QueryRegex.matchRegexTarget !== "function") {
-            throw new Error("正则模块未加载");
-        }
-        return window.QueryRegex.matchRegexTarget(spec, code, remark, re);
-    }
-
-    function appendResultRow(tbody, line, matchKey, item, discount, decimals, threshold, isExact) {
-        const priceInfo = calcDiscountedPrice(item.p, discount, decimals, threshold);
-        const rowData = {
-            id: g_Results.length,
-            code: item.c,
-            spec: matchKey,
-            price: priceInfo.display,
-            facePrice: item.p,
-            remark: item.r,
-            special: item.s,
-            stock: item.i,
-            discount: discount,
-            checked: isExact
-        };
-        g_Results.push(rowData);
-
-        const metaTr = document.createElement('tr');
-        metaTr.className = 'result-meta';
-        if(isExact) metaTr.classList.add('match-exact');
-        metaTr.innerHTML = `
-            <td class="col-check sticky-check" rowspan="2"><input type="checkbox" data-id="${rowData.id}" ${isExact?'checked':''}></td>
-            <td class="meta-cell" colspan="3">
-                <div class="meta-line">
-                    <span class="meta-item"><span class="meta-value">${item.c || ""}</span></span>
-                    <span class="meta-item meta-spec"><span class="meta-value">${matchKey}</span></span>
-		    <span class="meta-item"><span class="meta-value">面价${item.p || ""}</span></span>
-                    <span class="meta-item meta-stock"><span class="meta-value">${item.i || ""}</span></span>
-                </div>
-            </td>
-        `;
-
-        const mainTr = document.createElement('tr');
-        mainTr.className = 'result-main';
-        if(isExact) mainTr.classList.add('match-exact');
-        mainTr.setAttribute('data-row-id', String(rowData.id));
-        mainTr.innerHTML = `
-            <td class="discount-cell-wrap">
-                <div class="discount-cell">
-                    <input class="discount-input" type="number" step="0.01" value="${(rowData.discount * 100).toFixed(2)}" data-id="${rowData.id}" oninput="onRowDiscountChange(this)">
-                    <span class="discount-suffix">%</span>
-                </div>
-            </td>
-            <td class="price deal-cell">${priceInfo.display}</td>
-            <td class="remark">${item.r || ""}</td>
-        `;
-        tbody.appendChild(metaTr);
-        tbody.appendChild(mainTr);
-    }
-
-    function renderSearchResults(lines, lineMatcher, exactMatcher) {
-        const discount = parseFloat(document.getElementById('discount').value) || 1;
-        const decimals = parseInt(document.getElementById('decimals').value) || 0;
-        const threshold = parseFloat(document.getElementById('threshold').value) || 100;
-
-        const tbody = document.getElementById('resultBody');
-        tbody.innerHTML = '';
-        g_Results = [];
-
-        const allKeys = Object.keys(DB);
-
-        lines.forEach(line => {
-            const matches = lineMatcher(line, allKeys) || [];
-
-            matches.forEach(matchKey => {
-                const item = DB[matchKey];
-                if (!item) return;
-                const isExact = exactMatcher ? exactMatcher(line, matchKey) : false;
-                appendResultRow(tbody, line, matchKey, item, discount, decimals, threshold, isExact);
-            });
-        });
-
-        if(g_Results.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:20px">没有找到匹配项</td></tr>';
-        }
-    }
-
-    async function doSearch() {
-        const ready = await ensureDataLoaded();
-        if (!ready) return;
-
-        const lines = getQueryLines();
-        renderSearchResults(
-            lines,
-            (line, allKeys) => {
-                const keywords = line.trim().toUpperCase().split(/\s+/);
-                if (!keywords.length) return [];
-                return allKeys.filter(key => {
-                    const item = DB[key];
-                    const fullStr = (key + " " + item.c).toUpperCase();
-                    return keywords.every(kw => fullStr.includes(kw));
-                });
-            },
-            (line, matchKey) => (matchKey.toUpperCase() === line.trim().toUpperCase())
-        );
-    }
-
-    async function doRegexSearchConverted() {
-        const ready = await ensureDataLoaded();
-        if (!ready) return;
-
-        const lines = getQueryLines();
-        renderSearchResults(
-            lines,
-            (line, allKeys) => {
-                const re = convertPlainLineToRegex(line);
-                if (!re) return [];
-                return allKeys.filter(key => {
-                    const item = DB[key] || {};
-                    return hasStockValue(item.i) && matchRegexTarget(key, item.c || "", item.r || "", re);
-                });
-            },
-            () => false
-        );
-        showToast("已按库存查询并过滤无库存项");
-    }
-
-    function calcDiscountedPrice(facePrice, discount, decimals, threshold) {
-        const rawCalc = facePrice * discount;
-        const factor = Math.pow(10, decimals);
-        let finalPrice = Math.ceil(rawCalc * factor) / factor;
-        if(finalPrice > threshold) finalPrice = Math.ceil(rawCalc);
-        const display = (finalPrice % 1 === 0 && finalPrice > threshold)
-            ? finalPrice.toFixed(0) : finalPrice.toFixed(decimals);
-        return { value: finalPrice, display: display };
-    }
-
-    function onRowDiscountChange(input) {
-        const id = parseInt(input.getAttribute('data-id'), 10);
-        if(isNaN(id) || !g_Results[id]) return;
-
-        const decimals = parseInt(document.getElementById('decimals').value) || 0;
-        const threshold = parseFloat(document.getElementById('threshold').value) || 100;
-        let discountPercent = parseFloat(input.value);
-        if(isNaN(discountPercent)) discountPercent = 0;
-
-        const discount = discountPercent / 100;
-        const row = g_Results[id];
-        const priceInfo = calcDiscountedPrice(row.facePrice, discount, decimals, threshold);
-        row.discount = discount;
-        row.price = priceInfo.display;
-
-        const tr = input.closest('tr[data-row-id]');
-        if(tr) {
-            const priceCell = tr.querySelector('.price');
-            if(priceCell) priceCell.textContent = priceInfo.display;
-        }
-    }
-
-    function doCopy() {
-        const checkboxes = document.querySelectorAll('#resultBody input[type=checkbox]');
-        checkboxes.forEach(cb => {
-            const id = cb.getAttribute('data-id');
-            if(g_Results[id]) g_Results[id].checked = cb.checked;
-        });
-
-        const selected = g_Results.filter(r => r.checked);
-        if(selected.length === 0) return showToast("请先勾选需要复制的行");
-
-        const showCode = document.getElementById('chk_code').checked;
-        const showSpec = document.getElementById('chk_spec').checked;
-        const showPrice = document.getElementById('chk_price').checked;
-        const showSpecial = document.getElementById('chk_special').checked;
-        const showStock = document.getElementById('chk_stock').checked;
-        const showRemark = document.getElementById('chk_remark').checked;
-
-        let text = "";
-        selected.forEach(res => {
-            const line1Parts = [];
-            if(showCode) line1Parts.push(res.code);
-            if(showSpec) line1Parts.push(res.spec);
-            if(showPrice) line1Parts.push("含税" + res.price);
-            if(showSpecial && res.special) line1Parts.push("特价:" + res.special);
-            if(showStock && res.stock) line1Parts.push(res.stock);
-
-            text += line1Parts.join(" ") + "\n";
-            if(showRemark && res.remark) text += res.remark + "\n";
-        });
-
-        copyToClipboard(text);
-    }
-
-    function toggleAll(source) {
-        const checkboxes = document.querySelectorAll('#resultBody input[type=checkbox]');
-        checkboxes.forEach(cb => cb.checked = source.checked);
-    }
-
-    function openMmcLogin() {
-        copyToClipboard(MMC_PASSWORD);
-        showToast("已复制密码");
-        window.open(MMC_URL);
-    }
-
-    function copyToClipboard(text) {
-        const el = document.createElement('textarea');
-        el.value = text;
-        el.style.position='fixed';
-        el.style.left='-9999px';
-        document.body.appendChild(el);
-        el.select();
-        try { document.execCommand('copy'); showToast("已复制"); } catch(e) {}
-        document.body.removeChild(el);
-    }
-
-    function showToast(msg) {
-        const t = document.getElementById('toast');
-        t.innerText = msg;
-        t.style.display='block';
-        setTimeout(() => t.style.display='none', 1500);
-    }
-</script>
+<script src="./app.js"></script>
 </body>
 </html>

@@ -29,14 +29,38 @@
     return safe.test(toStringSafe(value));
   }
 
-  function matchRegexTarget(spec, code, remark, re) {
+  function collectMatchFields(args) {
+    if (!args.length) return [];
+
+    var first = args[0];
+    if (Array.isArray(first)) return first;
+    if (first && typeof first === "object") {
+      return [
+        first.spec,
+        first.code,
+        first.name,
+        first.mnemonic,
+        first.remark,
+        first.alias,
+        first.special,
+      ];
+    }
+    if (args.length === 1) return [args[0]];
+
+    return args;
+  }
+
+  function matchRegexTarget() {
+    var args = Array.prototype.slice.call(arguments);
+    var re = args.pop();
     if (!(re instanceof RegExp)) throw new Error("re must be RegExp");
-    var combined = [spec, code, remark].map(toStringSafe).join(" ");
+    var fields = collectMatchFields(args);
+    var combined = fields.map(toStringSafe).join(" ");
     return (
       testRegex(re, combined) ||
-      testRegex(re, spec) ||
-      testRegex(re, code) ||
-      testRegex(re, remark)
+      fields.some(function (field) {
+        return testRegex(re, field);
+      })
     );
   }
 

@@ -160,6 +160,9 @@
         s: toStringSafe(row["特价"]),
         r: toStringSafe(row["补充说明"]),
         b: toStringSafe(row.brand),
+        n: toStringSafe(row["名称"]),
+        m: toStringSafe(row["助记码"]),
+        a: toStringSafe(row["别名"]),
       };
     }
     return { bySpec: bySpec };
@@ -238,6 +241,9 @@
         s: toStringSafe(item.s),
         r: toStringSafe(item.r),
         b: toStringSafe(item.b),
+        n: toStringSafe(item.n),
+        m: toStringSafe(item.m),
+        a: toStringSafe(item.a),
         i: stockMap[code] || "",
       };
     }

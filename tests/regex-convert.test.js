@@ -23,6 +23,19 @@ function run() {
 
   const remarkOnly = QueryRegex.convertPlainLineToRegex("H7-123");
   assert.strictEqual(QueryRegex.matchRegexTarget("spec", "code", "Remark H7-123", remarkOnly), true);
+
+  const objectTarget = {
+    spec: "DNMG150608",
+    code: "03.03.001",
+    name: "OSG cutter",
+    mnemonic: "DNMG150608OSG",
+    remark: "for alloy steel",
+    alias: "premium insert",
+    special: "EX activity",
+  };
+  assert.strictEqual(QueryRegex.matchRegexTarget(objectTarget, QueryRegex.convertPlainLineToRegex("premium")), true);
+  assert.strictEqual(QueryRegex.matchRegexTarget(objectTarget, QueryRegex.convertPlainLineToRegex("EX activity")), true);
+  assert.strictEqual(QueryRegex.matchRegexTarget(objectTarget, QueryRegex.convertPlainLineToRegex("DNMG150608 OSG")), true);
   assert.strictEqual(QueryRegex.hasStockValue("A仓:12"), true);
   assert.strictEqual(QueryRegex.hasStockValue("   "), false);
 }

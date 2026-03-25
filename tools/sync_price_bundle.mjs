@@ -255,10 +255,10 @@ function rowsFromBySpec(bySpec) {
       代码: toStringSafe(item.c),
       规格型号: spec,
       销售单价: Number(item.p) || 0,
-      名称: "",
-      助记码: "",
+      名称: toStringSafe(item.n),
+      助记码: toStringSafe(item.m),
       补充说明: toStringSafe(item.r),
-      别名: "",
+      别名: toStringSafe(item.a),
       特价: toStringSafe(item.s),
       brand: toStringSafe(item.b),
     });
@@ -336,6 +336,9 @@ function canonicalizeBySpec(bySpec) {
       s: toStringSafe(item.s),
       r: toStringSafe(item.r),
       b: toStringSafe(item.b),
+      n: toStringSafe(item.n),
+      m: toStringSafe(item.m),
+      a: toStringSafe(item.a),
     };
   }
   return JSON.stringify(sorted);
