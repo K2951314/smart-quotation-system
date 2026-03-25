@@ -27,7 +27,6 @@ function run() {
   const objectTarget = {
     spec: "DNMG150608",
     code: "03.03.001",
-    name: "OSG cutter",
     mnemonic: "DNMG150608OSG",
     remark: "for alloy steel",
     alias: "premium insert",

@@ -23,6 +23,7 @@ function run() {
   assert.ok(appJs.includes("discountPercent"), "row state should keep ui-facing discount percent");
   assert.ok(appJs.includes("adjustRowDiscount"), "app should expose row discount stepper logic");
   assert.ok(appJs.includes("findMatchesByRegex"), "app should unify smart search and inventory search");
+  assert.ok(!appJs.includes('name: item.n || ""'), "row state should no longer depend on name");
   assert.ok(appJs.includes('n: item.n || ""'), "price name field should flow into merged DB");
   assert.ok(appJs.includes('m: item.m || ""'), "price mnemonic field should flow into merged DB");
   assert.ok(appJs.includes('a: item.a || ""'), "price alias field should flow into merged DB");
@@ -38,6 +39,7 @@ function run() {
   assert.ok(css.includes(".results-shell"), "styles should include result workspace shell");
   assert.ok(html.includes('class="result-count"'), "result count badge should be present");
   assert.ok(html.includes('class="query-note"'), "query panel should include rule note");
+  assert.ok(!html.includes("名称"), "page copy should no longer reference name");
   assert.ok(!appJs.includes("onRowDiscountChange"), "legacy row text input handler should be removed");
   assert.ok(!html.includes('class="discount-input"'), "legacy discount input should be removed");
 }

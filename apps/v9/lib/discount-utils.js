@@ -6,7 +6,6 @@
   }
 })(typeof self !== "undefined" ? self : this, function () {
   var FALLBACK_DISCOUNT_PERCENT = 53;
-  var TOOL_DISCOUNT_PERCENT = 53;
   var OSG_DISCOUNT_PERCENT = 36;
   var EX_ACTIVITY_DISCOUNT_PERCENT = 32;
   var MIN_DISCOUNT_PERCENT = 0;
@@ -50,7 +49,7 @@
   function getDefaultDiscountPreset(item) {
     var source = item || {};
     var special = toStringSafe(source.special);
-    var name = toStringSafe(source.name);
+    var spec = toStringSafe(source.spec);
 
     if (includesNormalized(special, "EX活动")) {
       return {
@@ -60,19 +59,11 @@
       };
     }
 
-    if (includesNormalized(name, "OSG")) {
+    if (includesNormalized(spec, "OSG")) {
       return {
         percent: OSG_DISCOUNT_PERCENT,
         source: "osg",
         label: "OSG 36%",
-      };
-    }
-
-    if (compactText(name) === "刀具") {
-      return {
-        percent: TOOL_DISCOUNT_PERCENT,
-        source: "tool",
-        label: "刀具 53%",
       };
     }
 
@@ -102,7 +93,6 @@
 
   return {
     FALLBACK_DISCOUNT_PERCENT: FALLBACK_DISCOUNT_PERCENT,
-    TOOL_DISCOUNT_PERCENT: TOOL_DISCOUNT_PERCENT,
     OSG_DISCOUNT_PERCENT: OSG_DISCOUNT_PERCENT,
     EX_ACTIVITY_DISCOUNT_PERCENT: EX_ACTIVITY_DISCOUNT_PERCENT,
     DEFAULT_STEP_PERCENT: DEFAULT_STEP_PERCENT,

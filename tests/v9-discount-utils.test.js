@@ -3,22 +3,22 @@ const DiscountUtils = require("../apps/v9/lib/discount-utils");
 
 function run() {
   assert.strictEqual(
-    DiscountUtils.getDefaultDiscountPercent({ name: "\u5200\u5177", special: "" }),
+    DiscountUtils.getDefaultDiscountPercent({ spec: "WNMG080408", special: "" }),
     53,
-    "exact tool name should default to 53%"
+    "unmatched specs should default to 53%"
   );
   assert.strictEqual(
-    DiscountUtils.getDefaultDiscountPercent({ name: "OSG \u4e1d\u9525", special: "" }),
+    DiscountUtils.getDefaultDiscountPercent({ spec: "OSG A-TAP M8", special: "" }),
     36,
-    "OSG name should default to 36%"
+    "OSG spec should default to 36%"
   );
   assert.strictEqual(
-    DiscountUtils.getDefaultDiscountPercent({ name: "OSG \u5200\u5177", special: "EX\u6d3b\u52a8" }),
+    DiscountUtils.getDefaultDiscountPercent({ spec: "OSG A-TAP M8", special: "EX\u6d3b\u52a8" }),
     32,
     "EX activity should override other rules"
   );
   assert.strictEqual(
-    DiscountUtils.getDefaultDiscountPercent({ name: "\u666e\u901a\u4ea7\u54c1", special: "" }),
+    DiscountUtils.getDefaultDiscountPercent({ spec: "\u666e\u901a\u4ea7\u54c1", special: "" }),
     53,
     "unmatched items should fall back to 53%"
   );

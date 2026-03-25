@@ -27,13 +27,13 @@
       <div class="field-group">
         <label for="discountStep">步长</label>
         <div class="field-shell">
-          <input type="number" id="discountStep" value="0.01" step="0.01" min="0.01">
+          <input type="number" id="discountStep" value="0.1" step="0.5" min="1">
           <span class="field-unit">百分点</span>
         </div>
         <div class="step-presets">
-          <button type="button" class="step-preset is-active" data-step="0.01" onclick="setDiscountStepPreset(this)">0.01</button>
-          <button type="button" class="step-preset" data-step="0.1" onclick="setDiscountStepPreset(this)">0.1</button>
+          <button type="button" class="step-preset is-active" data-step="0.1" onclick="setDiscountStepPreset(this)">0.1</button>
           <button type="button" class="step-preset" data-step="0.5" onclick="setDiscountStepPreset(this)">0.5</button>
+          <button type="button" class="step-preset" data-step="1" onclick="setDiscountStepPreset(this)">1</button>
         </div>
       </div>
 
@@ -76,12 +76,12 @@
         <div>
           <div class="panel-kicker">Query</div>
           <h2>输入规格与关键字</h2>
-          <p>每行一条。智能匹配与库存查询都支持代码、规格型号、名称、助记码、补充说明、别名、特价等字段。</p>
+          <p>每行一条。智能匹配与库存查询都支持代码、规格型号、助记码、补充说明、别名、特价等字段。</p>
         </div>
       </div>
       <textarea id="queryInput" class="query-input" placeholder="请输入规格型号...&#10;支持多关键词，例如：&#10;WNMG080408 UC5115"></textarea>
       <div class="query-note">
-        <div>默认折扣优先级：EX活动 32% → OSG 36% → 刀具 53% → 普通商品 53%</div>
+        <div>默认折扣优先级：特价包含 EX活动 32% → 规格型号包含 OSG 36% → 其他 53%</div>
         <div>单击折扣左右按钮增减一次；按住约 280ms 后会按当前步长连续增减，松开立即停止。</div>
       </div>
     </section>
@@ -92,7 +92,7 @@
           <div>
             <div class="panel-kicker">Result</div>
             <h2>结果工作台</h2>
-            <p>逐行查看面价、库存、名称、助记码、别名、特价与备注，并用左右按钮微调折扣。</p>
+            <p>逐行查看面价、库存、助记码、别名、特价与备注，并用左右按钮微调折扣。</p>
           </div>
         </div>
         <div class="result-count"><strong id="resultCount">0</strong><span>条结果</span></div>

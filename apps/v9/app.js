@@ -23,7 +23,15 @@ const DiscountEngine = window.DiscountUtils || {
     if (!Number.isFinite(num) || num <= 0) return 0.01;
     return Math.round(num * 100) / 100;
   },
-  getDefaultDiscountPreset() {
+  getDefaultDiscountPreset(item) {
+    const source = item || {};
+    const compact = (value) => String(value || "").replace(/\s+/g, "").toUpperCase();
+    if (compact(source.special).includes("EX活动")) {
+      return { percent: 32, source: "ex-activity", label: "EX活动 32%" };
+    }
+    if (compact(source.spec).includes("OSG")) {
+      return { percent: 36, source: "osg", label: "OSG 36%" };
+    }
     return { percent: 53, source: "fallback", label: "默认 53%" };
   },
   formatDiscountPercent(value) {
@@ -431,7 +439,6 @@ function getSearchTarget(spec, item) {
   return {
     spec: spec || "",
     code: source.c || "",
-    name: source.n || "",
     mnemonic: source.m || "",
     remark: source.r || "",
     alias: source.a || "",
@@ -516,7 +523,6 @@ function buildMetaLine(matchKey, rowData, item) {
   const parts = [
     '<span class="meta-item"><strong>' + escapeHtml(rowData.code) + "</strong></span>",
     '<span class="meta-item"><strong>' + escapeHtml(matchKey) + "</strong></span>",
-    '<span class="meta-item">名称 ' + escapeHtml(rowData.name || "未命名") + "</span>",
     '<span class="meta-item">面价 ' + escapeHtml(formatCompactNumber(item.p || 0)) + "</span>",
     '<span class="meta-item meta-stock">库存 ' + escapeHtml(rowData.stock || "无库存信息") + "</span>",
     '<span class="meta-chip">' + escapeHtml(rowData.discountLabel) + "</span>"
@@ -548,7 +554,7 @@ function getDiscountButtonMarkup(rowId, direction) {
 
 function appendResultRow(tbody, matchKey, item, isExact) {
   const preset = DiscountEngine.getDefaultDiscountPreset({
-    name: item.n || "",
+    spec: matchKey,
     special: item.s || ""
   });
   const settings = getCurrentPriceSettings();
@@ -557,7 +563,6 @@ function appendResultRow(tbody, matchKey, item, isExact) {
     id: g_Results.length,
     code: item.c || "",
     spec: matchKey,
-    name: item.n || "",
     mnemonic: item.m || "",
     alias: item.a || "",
     price: priceInfo.display,
