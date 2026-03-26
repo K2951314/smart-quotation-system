@@ -7,30 +7,48 @@
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-<div id="toast" class="toast">已复制</div>
+<div id="toast" class="toast" role="status" aria-live="polite">已复制</div>
 
 <div class="shell">
   <header class="masthead">
-    <p class="eyebrow">Industrial Pricing Console</p>
-    <div class="brand-row">
-      <div>
+    <div class="brand-stack">
+      <p class="eyebrow">Pricing Workspace</p>
+      <div class="brand-line">
         <h1>智能查价系统 v9</h1>
-        <p class="subline">远程价格与库存双源工作台。查询、库存过滤、折扣调整都在同一屏完成，不再依赖查询前输入起始折扣。</p>
+        <div id="status" class="status-badge info">等待数据...</div>
       </div>
-      <div id="status" class="status-badge info">等待数据...</div>
+      <p class="subline">查价、调价、复制集中在同一屏完成，手机端操作固定悬浮到底部。</p>
     </div>
-    <div id="versions" class="version-bar">价格版本: - | 库存版本: -</div>
+
+    <div class="masthead-meta">
+      <div id="versions" class="version-bar">价格版本: - | 库存版本: -</div>
+      <button class="mmc-btn" type="button" onclick="openMmcLogin()">三菱库存</button>
+    </div>
   </header>
 
   <section class="toolbar" aria-label="查询控制台">
+    <div class="toolbar-top">
+      <div class="toolbar-title">
+        <div class="panel-kicker">Controls</div>
+        <h2>设置</h2>
+      </div>
+
+      <div class="toolbar-actions">
+        <button id="btnSearch" class="btn btn-search" onclick="doSearch()">智能匹配</button>
+        <button id="btnRegexConvert" class="btn btn-regex" onclick="doRegexSearchConverted()">库存查询</button>
+        <button id="btnCopy" class="btn btn-copy" onclick="doCopy()">复制勾选</button>
+      </div>
+    </div>
+
     <div class="toolbar-main">
-      <div class="field-group">
-        <label for="discountStep">步长</label>
+      <div class="field-group field-group-large">
+        <label for="discountStep">折扣步长</label>
         <div class="field-shell">
-          <input type="number" id="discountStep" value="0.1" step="0.5" min="1">
+          <input type="number" id="discountStep" value="0.1" step="0.01" min="0.01">
           <span class="field-unit">百分点</span>
         </div>
         <div class="step-presets">
+          <button type="button" class="step-preset" data-step="0.01" onclick="setDiscountStepPreset(this)">0.01</button>
           <button type="button" class="step-preset is-active" data-step="0.1" onclick="setDiscountStepPreset(this)">0.1</button>
           <button type="button" class="step-preset" data-step="0.5" onclick="setDiscountStepPreset(this)">0.5</button>
           <button type="button" class="step-preset" data-step="1" onclick="setDiscountStepPreset(this)">1</button>
@@ -40,21 +58,15 @@
       <div class="field-group">
         <label for="decimals">小数位</label>
         <div class="field-shell">
-          <input type="number" id="decimals" value="1" step="1">
+          <input type="number" id="decimals" value="1" step="1" min="0">
         </div>
       </div>
 
       <div class="field-group">
         <label for="threshold">取整阈值</label>
         <div class="field-shell">
-          <input type="number" id="threshold" value="100" step="1">
+          <input type="number" id="threshold" value="100" step="1" min="0">
         </div>
-      </div>
-
-      <div class="toolbar-actions">
-        <button id="btnSearch" class="btn btn-search" onclick="doSearch()">智能匹配</button>
-        <button id="btnRegexConvert" class="btn btn-regex" onclick="doRegexSearchConverted()">库存查询</button>
-        <button class="btn btn-copy" onclick="doCopy()">复制勾选</button>
       </div>
     </div>
 
@@ -66,23 +78,22 @@
       <label class="opt-lbl"><input type="checkbox" id="chk_special">特价信息</label>
       <label class="opt-lbl"><input type="checkbox" id="chk_stock">库存信息</label>
       <label class="opt-lbl is-accent"><input type="checkbox" id="chk_remark">补充说明</label>
-      <button class="mmc-btn" onclick="openMmcLogin()">三菱库存</button>
     </div>
   </section>
 
   <main class="workspace">
     <section class="query-panel">
-      <div class="section-head">
+      <div class="section-head section-head-compact">
         <div>
           <div class="panel-kicker">Query</div>
-          <h2>输入规格与关键字</h2>
-          <p>每行一条。智能匹配与库存查询都支持代码、规格型号、助记码、补充说明、别名、特价等字段。</p>
+          <h2>查询输入</h2>
+          <p>每行一条，支持规格、代码、备注和特价关键词。</p>
         </div>
       </div>
       <textarea id="queryInput" class="query-input" placeholder="请输入规格型号...&#10;支持多关键词，例如：&#10;WNMG080408 UC5115"></textarea>
-      <div class="query-note">
-        <div>默认折扣优先级：特价包含 EX活动 32% → 规格型号包含 OSG 36% → 其他 53%</div>
-        <div>单击折扣左右按钮增减一次；按住约 280ms 后会按当前步长连续增减，松开立即停止。</div>
+      <div class="query-note query-note-inline">
+        <span>默认折扣：EX活动 32% → OSG 36% → 其他 53%</span>
+        <span>长按折扣按钮约 280ms 后连续调整</span>
       </div>
     </section>
 
@@ -91,25 +102,23 @@
         <div class="section-head section-head-compact">
           <div>
             <div class="panel-kicker">Result</div>
-            <h2>结果工作台</h2>
-            <p>逐行查看面价、库存、助记码、别名、特价与备注，并用左右按钮微调折扣。</p>
+            <h2>结果</h2>
+            <p>压缩留白，单屏显示更多结果。</p>
           </div>
         </div>
-        <div class="result-count"><strong id="resultCount">0</strong><span>条结果</span></div>
+
+        <div class="result-panel-actions">
+          <label class="select-all-toggle">
+            <input id="toggleAllResults" type="checkbox" onchange="toggleAll(this)">
+            <span>全选结果</span>
+          </label>
+          <div class="result-stat"><strong id="resultCount">0</strong><span>条结果</span></div>
+          <div class="result-stat is-accent"><strong id="selectedCount">0</strong><span>已勾选</span></div>
+        </div>
       </div>
 
       <div class="results-shell">
-        <table>
-          <thead>
-            <tr>
-              <th class="col-check sticky-check"><input type="checkbox" onchange="toggleAll(this)"></th>
-              <th class="col-discount">折扣</th>
-              <th class="col-deal">折后价</th>
-              <th class="col-remark">备注</th>
-            </tr>
-          </thead>
-          <tbody id="resultBody"></tbody>
-        </table>
+        <div id="resultBody" class="result-list" aria-live="polite"></div>
       </div>
     </section>
   </main>

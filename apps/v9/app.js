@@ -51,9 +51,14 @@ const DiscountEngine = window.DiscountUtils || {
 window.onload = async function () {
   bindUiEvents();
   syncDiscountStepInput(document.getElementById("discountStep").value);
-  renderEmptyState("输入规格后开始查询，结果会显示在这里。");
+  renderLoadingState("正在同步远程价格与库存数据");
   updateResultCount();
-  await ensureDataLoaded();
+  const ready = await ensureDataLoaded();
+  if (ready) {
+    renderEmptyState("输入规格后开始查询，可在结果卡中直接调价与勾选复制。");
+  } else {
+    renderErrorState("远程数据暂未就绪，请稍后重试。");
+  }
 };
 
 function setStatus(msg, type) {
@@ -389,9 +394,70 @@ function updateResultCount() {
   document.getElementById("resultCount").textContent = String(g_Results.length);
 }
 
+function getSelectedCount() {
+  return g_Results.filter((row) => row.checked).length;
+}
+
+function syncToggleAllState() {
+  const master = document.getElementById("toggleAllResults");
+  if (!master) return;
+
+  const checkboxes = Array.from(document.querySelectorAll('#resultBody input[type="checkbox"][data-id]'));
+  if (!checkboxes.length) {
+    master.checked = false;
+    master.indeterminate = false;
+    return;
+  }
+
+  const checkedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+  master.checked = checkedCount === checkboxes.length;
+  master.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+}
+
+function updateSelectionUi() {
+  const selectedCount = getSelectedCount();
+  const selectedCountEl = document.getElementById("selectedCount");
+  if (selectedCountEl) selectedCountEl.textContent = String(selectedCount);
+
+  const copyBtn = document.getElementById("btnCopy");
+  if (copyBtn) {
+    if (!copyBtn.dataset.baseText) copyBtn.dataset.baseText = copyBtn.textContent || "复制勾选";
+    copyBtn.textContent = selectedCount > 0
+      ? copyBtn.dataset.baseText + " (" + selectedCount + ")"
+      : copyBtn.dataset.baseText;
+  }
+
+  syncToggleAllState();
+}
+
+function renderStateCard(kind, title, message, hint) {
+  const body = document.getElementById("resultBody");
+  const skeleton = kind === "loading"
+    ? '<div class="state-skeleton"><span class="skeleton-line skeleton-line-wide"></span><span class="skeleton-line"></span><span class="skeleton-line skeleton-line-short"></span></div>'
+    : "";
+
+  body.innerHTML = [
+    '<section class="state-card state-card--', kind, '">',
+    '<span class="state-kicker">', escapeHtml(title), "</span>",
+    "<h3>", escapeHtml(message), "</h3>",
+    hint ? "<p>" + escapeHtml(hint) + "</p>" : "",
+    skeleton,
+    "</section>"
+  ].join("");
+
+  updateSelectionUi();
+}
+
+function renderLoadingState(message) {
+  renderStateCard("loading", "数据同步", message, "首次打开会预加载远程价格与库存数据。");
+}
+
 function renderEmptyState(message) {
-  const tbody = document.getElementById("resultBody");
-  tbody.innerHTML = '<tr><td class="empty-state" colspan="4">' + escapeHtml(message) + "</td></tr>";
+  renderStateCard("empty", "等待查询", message, "支持规格、代码、助记码、别名、备注和特价关键词。");
+}
+
+function renderErrorState(message) {
+  renderStateCard("error", "加载失败", message, "请检查网络、远程清单或价格包密码。");
 }
 
 function getCurrentPriceSettings() {
@@ -473,6 +539,22 @@ function calcDiscountedPrice(facePrice, discount, decimals, threshold) {
   return { value: finalPrice, display: display };
 }
 
+function normalizeDiscountPercent(value, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return Number.isFinite(Number(fallback)) ? Number(fallback) : 53;
+  return Math.min(100, Math.max(0, Math.round(num * 100) / 100));
+}
+
+function flashPriceCell(priceCell) {
+  if (!priceCell) return;
+  if (priceCell._flashFrame) window.cancelAnimationFrame(priceCell._flashFrame);
+  priceCell.classList.remove("is-flashing");
+  priceCell._flashFrame = window.requestAnimationFrame(() => {
+    priceCell.classList.add("is-flashing");
+    priceCell._flashFrame = null;
+  });
+}
+
 function refreshRowPrice(row, flash) {
   if (!row) return;
   const settings = getCurrentPriceSettings();
@@ -484,20 +566,19 @@ function refreshRowPrice(row, flash) {
   );
   row.price = priceInfo.display;
 
-  const mainRow = document.querySelector('tr[data-row-id="' + row.id + '"]');
-  if (!mainRow) return;
+  const resultCard = row.cardEl || document.querySelector('.result-card[data-row-id="' + row.id + '"]');
+  if (!resultCard) return;
+  row.cardEl = resultCard;
 
-  const discountValue = mainRow.querySelector(".discount-value");
-  const priceCell = mainRow.querySelector(".price");
+  const priceCell = row.priceEl || resultCard.querySelector(".price");
+  const discountInput = row.discountInputEl || resultCard.querySelector(".discount-manual");
 
-  if (discountValue) discountValue.textContent = DiscountEngine.formatDiscountPercent(row.discountPercent);
+  if (priceCell) row.priceEl = priceCell;
+  if (discountInput) row.discountInputEl = discountInput;
+  if (discountInput) discountInput.value = formatCompactNumber(row.discountPercent);
   if (priceCell) {
     priceCell.textContent = priceInfo.display;
-    if (flash) {
-      priceCell.classList.remove("is-flashing");
-      void priceCell.offsetWidth;
-      priceCell.classList.add("is-flashing");
-    }
+    if (flash) flashPriceCell(priceCell);
   }
 }
 
@@ -505,38 +586,11 @@ function refreshRenderedPrices() {
   g_Results.forEach((row) => refreshRowPrice(row, false));
 }
 
-function buildRemarkCell(item) {
-  const special = String(item.s || "").trim();
-  const alias = String(item.a || "").trim();
-  const remark = String(item.r || "").trim();
-  const rows = [];
-
-  if (special) rows.push('<span class="remark-badge">' + escapeHtml(special) + "</span>");
-  if (alias) rows.push('<span class="remark-text">别名：' + escapeHtml(alias) + "</span>");
-  if (remark) rows.push('<span class="remark-text">' + escapeHtml(remark) + "</span>");
-  if (!rows.length) rows.push('<span class="remark-text">无补充说明</span>');
-
-  return '<div class="remark-stack">' + rows.join("") + "</div>";
-}
-
-function buildMetaLine(matchKey, rowData, item) {
-  const parts = [
-    '<span class="meta-item"><strong>' + escapeHtml(rowData.code) + "</strong></span>",
-    '<span class="meta-item"><strong>' + escapeHtml(matchKey) + "</strong></span>",
-    '<span class="meta-item">面价 ' + escapeHtml(formatCompactNumber(item.p || 0)) + "</span>",
-    '<span class="meta-item meta-stock">库存 ' + escapeHtml(rowData.stock || "无库存信息") + "</span>",
-    '<span class="meta-chip">' + escapeHtml(rowData.discountLabel) + "</span>"
-  ];
-
-  if (rowData.mnemonic) {
-    parts.push('<span class="meta-item">助记码 ' + escapeHtml(rowData.mnemonic) + "</span>");
-  }
-
-  if (rowData.alias) {
-    parts.push('<span class="meta-item">别名 ' + escapeHtml(rowData.alias) + "</span>");
-  }
-
-  return parts.join("");
+function applyManualDiscount(id, rawValue) {
+  const row = getRowById(id);
+  if (!row) return;
+  row.discountPercent = normalizeDiscountPercent(rawValue, row.discountPercent);
+  refreshRowPrice(row, true);
 }
 
 function getDiscountButtonMarkup(rowId, direction) {
@@ -552,7 +606,7 @@ function getDiscountButtonMarkup(rowId, direction) {
   ].join("");
 }
 
-function appendResultRow(tbody, matchKey, item, isExact) {
+function appendResultRow(resultList, matchKey, item, shouldCheck, isExact) {
   const preset = DiscountEngine.getDefaultDiscountPreset({
     spec: matchKey,
     special: item.s || ""
@@ -572,41 +626,58 @@ function appendResultRow(tbody, matchKey, item, isExact) {
     stock: item.i || "",
     discountPercent: preset.percent,
     discountLabel: preset.label,
-    checked: isExact
+    checked: shouldCheck
   };
   g_Results.push(rowData);
 
-  const metaTr = document.createElement("tr");
-  metaTr.className = "result-meta";
-  if (isExact) metaTr.classList.add("match-exact");
-  metaTr.innerHTML = [
-    '<td class="col-check sticky-check" rowspan="2"><input type="checkbox" data-id="', rowData.id, '" ', isExact ? "checked" : "", "></td>",
-    '<td class="meta-cell" colspan="3"><div class="meta-line">',
-    buildMetaLine(matchKey, rowData, item),
-    "</div></td>"
-  ].join("");
+  const stockMarkup = hasStockValue(rowData.stock)
+    ? '<span class="stock-chip">库存 ' + escapeHtml(rowData.stock) + "</span>"
+    : "";
+  const specialMarkup = rowData.special
+    ? '<span class="special-chip">' + escapeHtml(rowData.special) + "</span>"
+    : "";
+  const remarkMarkup = rowData.remark
+    ? '<p class="info-note">' + escapeHtml(rowData.remark) + "</p>"
+    : "";
 
-  const mainTr = document.createElement("tr");
-  mainTr.className = "result-main";
-  if (isExact) mainTr.classList.add("match-exact");
-  mainTr.setAttribute("data-row-id", String(rowData.id));
-  mainTr.innerHTML = [
-    '<td class="discount-cell-wrap"><div class="discount-stepper" data-id="', rowData.id, '">',
+  const resultCard = document.createElement("article");
+  resultCard.className = "result-card" + (isExact ? " match-exact" : "");
+  resultCard.setAttribute("data-row-id", String(rowData.id));
+  resultCard.innerHTML = [
+    '<div class="result-row">',
+    '<label class="select-chip"><input type="checkbox" data-id="', rowData.id, '" ', rowData.checked ? "checked" : "", '><span>勾选</span></label>',
+    '<div class="result-summary">',
+    '<div class="identity-line">',
+    '<div class="identity-code">', escapeHtml(rowData.code || "未设置代码"), "</div>",
+    '<h3 class="identity-spec">', escapeHtml(matchKey), "</h3>",
+    stockMarkup,
+    specialMarkup,
+    "</div>",
+    remarkMarkup,
+    "</div>",
+    '<div class="result-side">',
+    '<div class="result-metrics">',
+    '<div class="metric-inline"><span class="metric-label">面价</span><strong>', escapeHtml(formatCompactNumber(item.p || 0)), '</strong></div>',
+    '<div class="metric-inline metric-inline-accent"><span class="metric-label">含税价</span><strong class="price">', escapeHtml(priceInfo.display), '</strong></div>',
+    "</div>",
+    '<div class="discount-panel"><div class="discount-stepper" data-id="', rowData.id, '">',
     getDiscountButtonMarkup(rowData.id, -1),
-    '<span class="discount-value" data-id="', rowData.id, '">', escapeHtml(DiscountEngine.formatDiscountPercent(rowData.discountPercent)), "</span>",
+    '<label class="discount-input-shell"><input type="number" class="discount-manual" data-id="', rowData.id, '" min="0" max="100" step="0.01" inputmode="decimal" value="', escapeHtml(formatCompactNumber(rowData.discountPercent)), '"><span class="discount-unit">%</span></label>',
     getDiscountButtonMarkup(rowData.id, 1),
-    "</div></td>",
-    '<td class="deal-cell"><span class="price">', escapeHtml(priceInfo.display), "</span></td>",
-    '<td class="remark">', buildRemarkCell(item), "</td>"
+    "</div></div>",
+    "</div>",
+    "</div>"
   ].join("");
 
-  tbody.appendChild(metaTr);
-  tbody.appendChild(mainTr);
+  rowData.cardEl = resultCard;
+  rowData.priceEl = resultCard.querySelector(".price");
+  rowData.discountInputEl = resultCard.querySelector(".discount-manual");
+  resultList.appendChild(resultCard);
 }
 
 function renderSearchResults(lines, onlyInStock) {
-  const tbody = document.getElementById("resultBody");
-  tbody.innerHTML = "";
+  const resultList = document.getElementById("resultBody");
+  resultList.innerHTML = "";
   g_Results = [];
 
   if (!lines.length) {
@@ -619,10 +690,12 @@ function renderSearchResults(lines, onlyInStock) {
 
   lines.forEach((line) => {
     const matches = findMatchesByRegex(line, allKeys, onlyInStock);
+    const defaultChecked = matches.length === 1;
     matches.forEach((matchKey) => {
       const item = DB[matchKey];
       if (!item) return;
-      appendResultRow(tbody, matchKey, item, isExactSpecMatch(line, matchKey));
+      const isExact = isExactSpecMatch(line, matchKey);
+      appendResultRow(resultList, matchKey, item, isExact || defaultChecked, isExact);
     });
   });
 
@@ -631,22 +704,29 @@ function renderSearchResults(lines, onlyInStock) {
   }
 
   updateResultCount();
+  updateSelectionUi();
 }
 
 async function doSearch() {
   const ready = await ensureDataLoaded();
-  if (!ready) return;
+  if (!ready) {
+    renderErrorState("远程数据加载失败，请稍后重试。");
+    return;
+  }
   renderSearchResults(getQueryLines(), false);
 }
 
 async function doRegexSearchConverted() {
   const ready = await ensureDataLoaded();
-  if (!ready) return;
+  if (!ready) {
+    renderErrorState("远程数据加载失败，请稍后重试。");
+    return;
+  }
   renderSearchResults(getQueryLines(), true);
   showToast("已按库存查询并过滤无库存项");
 }
 
-function adjustRowDiscount(id, direction) {
+function adjustRowDiscount(id, direction, flash) {
   const row = getRowById(id);
   if (!row) return;
   row.discountPercent = DiscountEngine.shiftDiscountPercent(
@@ -654,7 +734,7 @@ function adjustRowDiscount(id, direction) {
     getCurrentDiscountStep(),
     direction
   );
-  refreshRowPrice(row, true);
+  refreshRowPrice(row, flash !== false);
 }
 
 function clearDiscountPressTimers(state) {
@@ -714,9 +794,9 @@ function startDiscountPress(event, id, direction) {
   state.timeoutId = window.setTimeout(() => {
     if (g_DiscountPressState !== state) return;
     state.repeatStarted = true;
-    adjustRowDiscount(state.id, state.direction);
+    adjustRowDiscount(state.id, state.direction, false);
     state.intervalId = window.setInterval(() => {
-      adjustRowDiscount(state.id, state.direction);
+      adjustRowDiscount(state.id, state.direction, false);
     }, HOLD_REPEAT_INTERVAL_MS);
   }, HOLD_START_DELAY_MS);
 
@@ -789,7 +869,10 @@ function toggleAll(source) {
   const checkboxes = document.querySelectorAll("#resultBody input[type=checkbox]");
   checkboxes.forEach((cb) => {
     cb.checked = source.checked;
+    const row = getRowById(cb.getAttribute("data-id"));
+    if (row) row.checked = cb.checked;
   });
+  updateSelectionUi();
 }
 
 function openMmcLogin() {
@@ -846,9 +929,33 @@ function bindUiEvents() {
   });
   document.getElementById("decimals").addEventListener("change", refreshRenderedPrices);
   document.getElementById("threshold").addEventListener("change", refreshRenderedPrices);
+  document.getElementById("resultBody").addEventListener("change", function (event) {
+    const target = event.target;
+    if (!target || typeof target.matches !== "function") return;
+    if (target.matches('input[type="checkbox"][data-id]')) {
+      const row = getRowById(target.getAttribute("data-id"));
+      if (row) row.checked = target.checked;
+      updateSelectionUi();
+      return;
+    }
+
+    if (target.matches(".discount-manual")) {
+      applyManualDiscount(target.getAttribute("data-id"), target.value);
+    }
+  });
+  document.getElementById("resultBody").addEventListener("keydown", function (event) {
+    const target = event.target;
+    if (!target || typeof target.matches !== "function") return;
+    if (!target.matches(".discount-manual")) return;
+    if (event.key !== "Enter") return;
+
+    event.preventDefault();
+    target.blur();
+  });
   window.addEventListener("pointerup", handleGlobalPointerUp);
   window.addEventListener("pointercancel", handleGlobalPointerCancel);
   window.addEventListener("blur", function () {
     stopDiscountPress(false);
   });
+  updateSelectionUi();
 }
