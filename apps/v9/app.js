@@ -17,11 +17,11 @@ const MMC_URL = "https://mcweb.mitsubishi-materials.com/concerto-mmsc-ec/login.j
 const MMC_PASSWORD = "%461971#";
 
 const DiscountEngine = window.DiscountUtils || {
-  DEFAULT_STEP_PERCENT: 0.01,
+  DEFAULT_STEP_PERCENT: 0.1,
   sanitizeStepPercent(value) {
     const num = Number(value);
-    if (!Number.isFinite(num) || num <= 0) return 0.01;
-    return Math.round(num * 100) / 100;
+    if (!Number.isFinite(num) || num <= 0) return 0.1;
+    return Math.max(0.1, Math.round(num * 100) / 100);
   },
   getDefaultDiscountPreset(item) {
     const source = item || {};
@@ -41,10 +41,29 @@ const DiscountEngine = window.DiscountUtils || {
   },
   shiftDiscountPercent(currentPercent, stepPercent, direction) {
     const current = Number.isFinite(Number(currentPercent)) ? Number(currentPercent) : 53;
-    const step = Number.isFinite(Number(stepPercent)) && Number(stepPercent) > 0 ? Number(stepPercent) : 0.01;
+    const step = Number.isFinite(Number(stepPercent)) && Number(stepPercent) > 0 ? Math.max(0.1, Number(stepPercent)) : 0.1;
     const dir = Number(direction) < 0 ? -1 : 1;
     const next = current + step * dir;
     return Math.min(100, Math.max(0, Math.round(next * 100) / 100));
+  }
+};
+
+const ResultSortEngine = window.ResultSort || {
+  sortResultsBySelection(results) {
+    if (!Array.isArray(results)) return [];
+    return results
+      .map((row, index) => ({
+        row,
+        checked: !!(row && row.checked),
+        orderIndex: Number.isFinite(Number(row && row.orderIndex))
+          ? Number(row.orderIndex)
+          : (Number.isFinite(Number(row && row.id)) ? Number(row.id) : index)
+      }))
+      .sort((left, right) => {
+        if (left.checked !== right.checked) return left.checked ? -1 : 1;
+        return left.orderIndex - right.orderIndex;
+      })
+      .map((entry) => entry.row);
   }
 };
 
@@ -82,7 +101,7 @@ function setSearchLoading(loading) {
     return;
   }
 
-  searchBtn.textContent = searchBtn.dataset.defaultText || "智能匹配";
+  searchBtn.textContent = searchBtn.dataset.defaultText || "智能查询";
   stockBtn.textContent = stockBtn.dataset.defaultText || "库存查询";
   searchBtn.disabled = false;
   stockBtn.disabled = false;
@@ -524,9 +543,9 @@ function findMatchesByRegex(line, allKeys, onlyInStock) {
 }
 
 function getRowById(id) {
-  const index = Number(id);
-  if (!Number.isInteger(index)) return null;
-  return g_Results[index] || null;
+  const rowId = Number(id);
+  if (!Number.isInteger(rowId)) return null;
+  return g_Results.find((row) => row && row.id === rowId) || null;
 }
 
 function calcDiscountedPrice(facePrice, discount, decimals, threshold) {
@@ -586,6 +605,31 @@ function refreshRenderedPrices() {
   g_Results.forEach((row) => refreshRowPrice(row, false));
 }
 
+function syncRowSelectionState(row) {
+  if (!row) return;
+  const resultCard = row.cardEl || document.querySelector('.result-card[data-row-id="' + row.id + '"]');
+  if (!resultCard) return;
+
+  row.cardEl = resultCard;
+  resultCard.classList.toggle("is-selected", !!row.checked);
+  resultCard.setAttribute("data-checked", row.checked ? "true" : "false");
+}
+
+function syncResultOrder() {
+  const resultList = document.getElementById("resultBody");
+  if (!resultList || !g_Results.length) return;
+
+  g_Results = ResultSortEngine.sortResultsBySelection(g_Results);
+  const fragment = document.createDocumentFragment();
+
+  g_Results.forEach((row) => {
+    syncRowSelectionState(row);
+    if (row && row.cardEl) fragment.appendChild(row.cardEl);
+  });
+
+  resultList.appendChild(fragment);
+}
+
 function applyManualDiscount(id, rawValue) {
   const row = getRowById(id);
   if (!row) return;
@@ -615,6 +659,7 @@ function appendResultRow(resultList, matchKey, item, shouldCheck, isExact) {
   const priceInfo = calcDiscountedPrice(item.p, preset.percent / 100, settings.decimals, settings.threshold);
   const rowData = {
     id: g_Results.length,
+    orderIndex: g_Results.length,
     code: item.c || "",
     spec: matchKey,
     mnemonic: item.m || "",
@@ -637,7 +682,10 @@ function appendResultRow(resultList, matchKey, item, shouldCheck, isExact) {
     ? '<span class="special-chip">' + escapeHtml(rowData.special) + "</span>"
     : "";
   const remarkMarkup = rowData.remark
-    ? '<p class="info-note">' + escapeHtml(rowData.remark) + "</p>"
+    ? '<span class="info-note info-note-inline">' + escapeHtml(rowData.remark) + "</span>"
+    : "";
+  const metaLineMarkup = (specialMarkup || remarkMarkup)
+    ? '<div class="meta-line">' + specialMarkup + remarkMarkup + "</div>"
     : "";
 
   const resultCard = document.createElement("article");
@@ -645,15 +693,14 @@ function appendResultRow(resultList, matchKey, item, shouldCheck, isExact) {
   resultCard.setAttribute("data-row-id", String(rowData.id));
   resultCard.innerHTML = [
     '<div class="result-row">',
-    '<label class="select-chip"><input type="checkbox" data-id="', rowData.id, '" ', rowData.checked ? "checked" : "", '><span>勾选</span></label>',
+    '<label class="select-chip discount-select-chip"><input type="checkbox" data-id="', rowData.id, '" ', rowData.checked ? "checked" : "", '><span>勾选</span></label>',
     '<div class="result-summary">',
     '<div class="identity-line">',
     '<div class="identity-code">', escapeHtml(rowData.code || "未设置代码"), "</div>",
     '<h3 class="identity-spec">', escapeHtml(matchKey), "</h3>",
     stockMarkup,
-    specialMarkup,
     "</div>",
-    remarkMarkup,
+    metaLineMarkup,
     "</div>",
     '<div class="result-side">',
     '<div class="result-metrics">',
@@ -662,7 +709,7 @@ function appendResultRow(resultList, matchKey, item, shouldCheck, isExact) {
     "</div>",
     '<div class="discount-panel"><div class="discount-stepper" data-id="', rowData.id, '">',
     getDiscountButtonMarkup(rowData.id, -1),
-    '<label class="discount-input-shell"><input type="number" class="discount-manual" data-id="', rowData.id, '" min="0" max="100" step="0.01" inputmode="decimal" value="', escapeHtml(formatCompactNumber(rowData.discountPercent)), '"><span class="discount-unit">%</span></label>',
+    '<label class="discount-input-shell"><input type="number" class="discount-manual" data-id="', rowData.id, '" min="0" max="100" step="0.1" inputmode="decimal" value="', escapeHtml(formatCompactNumber(rowData.discountPercent)), '"><span class="discount-unit">%</span></label>',
     getDiscountButtonMarkup(rowData.id, 1),
     "</div></div>",
     "</div>",
@@ -672,6 +719,7 @@ function appendResultRow(resultList, matchKey, item, shouldCheck, isExact) {
   rowData.cardEl = resultCard;
   rowData.priceEl = resultCard.querySelector(".price");
   rowData.discountInputEl = resultCard.querySelector(".discount-manual");
+  syncRowSelectionState(rowData);
   resultList.appendChild(resultCard);
 }
 
@@ -703,6 +751,7 @@ function renderSearchResults(lines, onlyInStock) {
     renderEmptyState("没有找到匹配项，请调整关键词或切换查询方式。");
   }
 
+  syncResultOrder();
   updateResultCount();
   updateSelectionUi();
 }
@@ -833,8 +882,12 @@ function doCopy() {
   checkboxes.forEach((cb) => {
     const id = cb.getAttribute("data-id");
     const row = getRowById(id);
-    if (row) row.checked = cb.checked;
+    if (row) {
+      row.checked = cb.checked;
+      syncRowSelectionState(row);
+    }
   });
+  syncResultOrder();
 
   const selected = g_Results.filter((row) => row.checked);
   if (selected.length === 0) {
@@ -870,8 +923,12 @@ function toggleAll(source) {
   checkboxes.forEach((cb) => {
     cb.checked = source.checked;
     const row = getRowById(cb.getAttribute("data-id"));
-    if (row) row.checked = cb.checked;
+    if (row) {
+      row.checked = cb.checked;
+      syncRowSelectionState(row);
+    }
   });
+  syncResultOrder();
   updateSelectionUi();
 }
 
@@ -917,6 +974,24 @@ function showToast(msg) {
   }, 1500);
 }
 
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function syncMobileActionDockState() {
+  const toolbarActions = document.querySelector(".toolbar-actions");
+  const backToTopButton = document.getElementById("btnBackToTop");
+  if (!toolbarActions) return;
+
+  const shouldStick = window.innerWidth <= 720 && toolbarActions.getBoundingClientRect().top <= 10;
+  toolbarActions.classList.toggle("is-stuck", shouldStick);
+
+  if (backToTopButton) {
+    const shouldShowBackTop = window.innerWidth <= 720 && window.scrollY > 260;
+    backToTopButton.classList.toggle("is-visible", shouldShowBackTop);
+  }
+}
+
 function bindUiEvents() {
   document.getElementById("discountStep").addEventListener("input", function () {
     updateStepPresetState(this.value);
@@ -934,7 +1009,11 @@ function bindUiEvents() {
     if (!target || typeof target.matches !== "function") return;
     if (target.matches('input[type="checkbox"][data-id]')) {
       const row = getRowById(target.getAttribute("data-id"));
-      if (row) row.checked = target.checked;
+      if (row) {
+        row.checked = target.checked;
+        syncRowSelectionState(row);
+      }
+      syncResultOrder();
       updateSelectionUi();
       return;
     }
@@ -957,5 +1036,8 @@ function bindUiEvents() {
   window.addEventListener("blur", function () {
     stopDiscountPress(false);
   });
+  window.addEventListener("scroll", syncMobileActionDockState, { passive: true });
+  window.addEventListener("resize", syncMobileActionDockState);
+  window.requestAnimationFrame(syncMobileActionDockState);
   updateSelectionUi();
 }

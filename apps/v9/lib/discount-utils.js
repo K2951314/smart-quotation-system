@@ -10,7 +10,7 @@
   var EX_ACTIVITY_DISCOUNT_PERCENT = 32;
   var MIN_DISCOUNT_PERCENT = 0;
   var MAX_DISCOUNT_PERCENT = 100;
-  var DEFAULT_STEP_PERCENT = 0.01;
+  var DEFAULT_STEP_PERCENT = 0.1;
 
   function toStringSafe(value) {
     if (value === null || value === undefined) return "";
@@ -35,7 +35,7 @@
   function sanitizeStepPercent(value) {
     var num = Number(value);
     if (!Number.isFinite(num) || num <= 0) return DEFAULT_STEP_PERCENT;
-    return roundToTwo(num);
+    return Math.max(DEFAULT_STEP_PERCENT, roundToTwo(num));
   }
 
   function compactText(value) {

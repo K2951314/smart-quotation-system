@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>智能查价系统 v9</title>
+<meta name="theme-color" content="#f7f3ec">
+<title>智能询价系统 v9</title>
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -11,47 +12,46 @@
 
 <div class="shell">
   <header class="masthead">
-    <div class="brand-stack">
-      <p class="eyebrow">Pricing Workspace</p>
+    <div class="masthead-main">
       <div class="brand-line">
-        <h1>智能查价系统 v9</h1>
+        <h1>智能询价系统 v9</h1>
         <div id="status" class="status-badge info">等待数据...</div>
       </div>
-      <p class="subline">查价、调价、复制集中在同一屏完成，手机端操作固定悬浮到底部。</p>
-    </div>
-
-    <div class="masthead-meta">
       <div id="versions" class="version-bar">价格版本: - | 库存版本: -</div>
-      <button class="mmc-btn" type="button" onclick="openMmcLogin()">三菱库存</button>
     </div>
+    <button class="mmc-btn" type="button" onclick="openMmcLogin()">三菱库存</button>
   </header>
 
   <section class="toolbar" aria-label="查询控制台">
-    <div class="toolbar-top">
-      <div class="toolbar-title">
-        <div class="panel-kicker">Controls</div>
-        <h2>设置</h2>
-      </div>
-
-      <div class="toolbar-actions">
-        <button id="btnSearch" class="btn btn-search" onclick="doSearch()">智能匹配</button>
-        <button id="btnRegexConvert" class="btn btn-regex" onclick="doRegexSearchConverted()">库存查询</button>
-        <button id="btnCopy" class="btn btn-copy" onclick="doCopy()">复制勾选</button>
-      </div>
+    <div class="toolbar-actions">
+      <button id="btnSearch" class="btn btn-search" onclick="doSearch()">智能查询</button>
+      <button id="btnRegexConvert" class="btn btn-regex" onclick="doRegexSearchConverted()">库存查询</button>
+      <button id="btnCopy" class="btn btn-copy" onclick="doCopy()">复制勾选</button>
     </div>
 
     <div class="toolbar-main">
       <div class="field-group field-group-large">
         <label for="discountStep">折扣步长</label>
         <div class="field-shell">
-          <input type="number" id="discountStep" value="0.1" step="0.01" min="0.01">
+          <input type="number" id="discountStep" value="0.1" step="0.1" min="0.1">
           <span class="field-unit">百分点</span>
         </div>
-        <div class="step-presets">
-          <button type="button" class="step-preset" data-step="0.01" onclick="setDiscountStepPreset(this)">0.01</button>
-          <button type="button" class="step-preset is-active" data-step="0.1" onclick="setDiscountStepPreset(this)">0.1</button>
-          <button type="button" class="step-preset" data-step="0.5" onclick="setDiscountStepPreset(this)">0.5</button>
-          <button type="button" class="step-preset" data-step="1" onclick="setDiscountStepPreset(this)">1</button>
+        <div class="field-group-inline">
+          <div class="step-presets">
+            <button type="button" class="step-preset is-active" data-step="0.1" onclick="setDiscountStepPreset(this)">0.1</button>
+            <button type="button" class="step-preset" data-step="0.5" onclick="setDiscountStepPreset(this)">0.5</button>
+            <button type="button" class="step-preset" data-step="1" onclick="setDiscountStepPreset(this)">1</button>
+          </div>
+
+          <div class="toolbar-copy toolbar-copy-inline">
+            <span class="copy-title">复制字段</span>
+            <label class="opt-lbl"><input type="checkbox" id="chk_code" checked>代码</label>
+            <label class="opt-lbl"><input type="checkbox" id="chk_spec" checked>规格</label>
+            <label class="opt-lbl"><input type="checkbox" id="chk_price" checked>含税价</label>
+            <label class="opt-lbl"><input type="checkbox" id="chk_special">特价信息</label>
+            <label class="opt-lbl"><input type="checkbox" id="chk_stock">库存信息</label>
+            <label class="opt-lbl is-accent"><input type="checkbox" id="chk_remark">补充说明</label>
+          </div>
         </div>
       </div>
 
@@ -70,41 +70,24 @@
       </div>
     </div>
 
-    <div class="toolbar-copy">
-      <span class="copy-title">复制字段</span>
-      <label class="opt-lbl"><input type="checkbox" id="chk_code" checked>代码</label>
-      <label class="opt-lbl"><input type="checkbox" id="chk_spec" checked>规格</label>
-      <label class="opt-lbl"><input type="checkbox" id="chk_price" checked>含税价</label>
-      <label class="opt-lbl"><input type="checkbox" id="chk_special">特价信息</label>
-      <label class="opt-lbl"><input type="checkbox" id="chk_stock">库存信息</label>
-      <label class="opt-lbl is-accent"><input type="checkbox" id="chk_remark">补充说明</label>
-    </div>
   </section>
 
   <main class="workspace">
     <section class="query-panel">
-      <div class="section-head section-head-compact">
-        <div>
-          <div class="panel-kicker">Query</div>
-          <h2>查询输入</h2>
-          <p>每行一条，支持规格、代码、备注和特价关键词。</p>
-        </div>
+      <div class="section-head section-head-compact section-head-inline">
+        <h2>输入</h2>
       </div>
       <textarea id="queryInput" class="query-input" placeholder="请输入规格型号...&#10;支持多关键词，例如：&#10;WNMG080408 UC5115"></textarea>
       <div class="query-note query-note-inline">
-        <span>默认折扣：EX活动 32% → OSG 36% → 其他 53%</span>
-        <span>长按折扣按钮约 280ms 后连续调整</span>
+        <span>默认折扣：EX 32% / OSG 36% / 其他 53%</span>
+        <span>勾选项自动置顶</span>
       </div>
     </section>
 
     <section class="result-panel">
       <div class="result-panel-header">
-        <div class="section-head section-head-compact">
-          <div>
-            <div class="panel-kicker">Result</div>
-            <h2>结果</h2>
-            <p>压缩留白，单屏显示更多结果。</p>
-          </div>
+        <div class="section-head section-head-compact section-head-inline">
+          <h2>结果</h2>
         </div>
 
         <div class="result-panel-actions">
@@ -124,8 +107,11 @@
   </main>
 </div>
 
+<button id="btnBackToTop" class="mobile-back-top" type="button" onclick="scrollToTop()">回顶部</button>
+
 <script src="./lib/query-regex.js"></script>
 <script src="./lib/discount-utils.js"></script>
+<script src="./lib/result-sort.js"></script>
 <script src="runtime-config.js"></script>
 <script src="./app.js"></script>
 </body>
