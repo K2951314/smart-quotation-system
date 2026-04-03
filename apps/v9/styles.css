@@ -2596,8 +2596,31 @@ body.has-overlay {
 
 /* v9 toolbar/result control alignment */
 
+:root {
+  --toolbar-stack-height: 0px;
+}
+
+.btn-mmc {
+  border-color: rgba(18, 108, 105, 0.16);
+  background: linear-gradient(135deg, rgba(18, 108, 105, 0.14), rgba(232, 184, 123, 0.1));
+  color: var(--accent-ink);
+}
+
+.masthead {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.toolbar {
+  top: 12px;
+}
+
+.toolbar-actions {
+  min-width: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .toolbar-main {
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .field-group-large,
@@ -2608,71 +2631,161 @@ body.has-overlay {
 }
 
 .toolbar-secondary-main {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
 }
 
 .toolbar-control-band {
+  display: contents;
+}
+
+.toolbar-step-presets {
+  grid-column: 1;
   min-width: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.toolbar-step-presets::-webkit-scrollbar {
+  display: none;
 }
 
 .toolbar-result-actions {
+  grid-column: 2;
+  width: 100%;
   min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: stretch;
+}
+
+.toolbar-result-actions .result-stat,
+.toolbar-result-actions .select-all-toggle {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+}
+
+.toolbar-copy-inline {
+  grid-column: 3;
+  width: 100%;
+  display: flex;
   flex-wrap: nowrap;
-  justify-content: flex-end;
+  gap: 6px;
+  justify-content: flex-start;
+  padding-top: 0;
+  border-top: none;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
 
-.toolbar-result-actions::-webkit-scrollbar {
+.toolbar-copy-inline::-webkit-scrollbar {
   display: none;
 }
 
-.toolbar-result-actions .result-stat,
-.toolbar-result-actions .select-all-toggle {
+.toolbar-copy-inline .opt-lbl {
   flex: 0 0 auto;
+  min-height: 1.68rem;
+  padding: 0 0.54rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
 }
 
 .result-panel-header {
   align-items: center;
 }
 
+.version-bar {
+  min-width: 0;
+}
+
+.query-panel {
+  position: sticky;
+  top: calc(12px + var(--toolbar-stack-height) + 12px);
+  z-index: 17;
+}
+
 @media (max-width: 900px) {
-  .toolbar-main {
+  .toolbar-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .toolbar-main,
+  .toolbar-secondary-main {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .toolbar-secondary-main {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-
-  .toolbar-control-band {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-
   .toolbar-result-actions {
-    justify-content: flex-start;
+    grid-column: 2;
+    gap: 6px;
+  }
+
+  .toolbar-copy-inline {
+    grid-column: 3;
+  }
+
+  .query-panel {
+    top: calc(12px + var(--toolbar-stack-height) + 10px);
   }
 }
 
 @media (max-width: 720px) {
-  .toolbar-main {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .toolbar-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .toolbar-control-band {
+  .toolbar-main,
+  .toolbar-secondary-main {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
   }
 
   .toolbar-result-actions {
-    width: 100%;
+    grid-column: 2;
     gap: 5px;
+  }
+
+  .toolbar-result-actions .result-stat,
+  .toolbar-result-actions .select-all-toggle {
+    min-height: 1.9rem;
+    padding: 0 0.44rem;
+    font-size: 0.68rem;
+  }
+
+  .toolbar-copy-inline {
+    grid-column: 3;
+    gap: 5px;
+  }
+
+  .toolbar-copy-inline .opt-lbl {
+    min-height: 1.56rem;
+    padding: 0 0.46rem;
+    font-size: 0.69rem;
+  }
+
+  .version-bar {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    word-break: normal;
+    scrollbar-width: none;
+  }
+
+  .version-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .query-panel {
+    top: calc(8px + var(--toolbar-stack-height) + 8px);
+  }
+
+  .query-input {
+    min-height: 11rem;
+    max-height: 38vh;
   }
 }

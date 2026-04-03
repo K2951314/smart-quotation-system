@@ -19,13 +19,13 @@
       </div>
       <div id="versions" class="version-bar">价格版本: - | 库存版本: -</div>
     </div>
-    <button class="mmc-btn" type="button" onclick="openMmcLogin()">三菱库存</button>
   </header>
 
   <section class="toolbar" aria-label="查询控制台">
     <div class="toolbar-actions">
       <button id="btnSearch" class="btn btn-search" onclick="doSearch()">智能查询</button>
       <button id="btnRegexConvert" class="btn btn-regex" onclick="doRegexSearchConverted()">库存查询</button>
+      <button class="btn btn-mmc" type="button" onclick="openMmcLogin()">三菱库存</button>
       <button id="btnCopy" class="btn btn-copy" onclick="doCopy()">复制勾选</button>
     </div>
 
@@ -56,7 +56,7 @@
     <div class="toolbar-secondary">
       <div class="toolbar-secondary-main">
         <div class="toolbar-control-band">
-          <div class="step-presets">
+          <div class="step-presets toolbar-step-presets">
             <button type="button" class="step-preset is-active" data-step="0.1" onclick="setDiscountStepPreset(this)">0.1</button>
             <button type="button" class="step-preset" data-step="0.5" onclick="setDiscountStepPreset(this)">0.5</button>
             <button type="button" class="step-preset" data-step="1" onclick="setDiscountStepPreset(this)">1</button>
@@ -167,6 +167,7 @@
 <script src="./lib/query-regex.js"></script>
 <script src="./lib/discount-utils.js"></script>
 <script src="./lib/result-sort.js"></script>
+<script src="./lib/remote-source-utils.js"></script>
 <script src="./lib/version-utils.js"></script>
 <script src="runtime-config.js"></script>
 <script src="./app.js"></script>

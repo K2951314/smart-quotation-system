@@ -14,6 +14,7 @@ let g_ToastTimer = null;
 let g_DiscountPressState = null;
 let g_RemoteDefaultDiscountConfig = null;
 let g_HasLocalDefaultDiscountConfig = false;
+let g_LayoutMetricsFrame = null;
 
 const HOLD_START_DELAY_MS = 280;
 const HOLD_REPEAT_INTERVAL_MS = 70;
@@ -53,9 +54,10 @@ const DiscountEngine = window.DiscountUtils || {
     const source = item || {};
     const compact = (value) => String(value || "").replace(/\s+/g, "").toUpperCase();
     const brandAndSpec = [source.brand, source.spec].filter(Boolean).join(" ");
+    const name = String(source.name || source.n || "").trim();
     if (compact(source.special).includes("EX活动")) return "ex";
     if (/OSG/i.test(brandAndSpec)) return "osg";
-    if (/三菱|MITSUBISHI|MMC/i.test(brandAndSpec)) return "mitsubishi";
+    if (name === "刀具") return "mitsubishi";
     return "other";
   },
   getDefaultDiscountPreset(item, config) {
@@ -109,6 +111,69 @@ const VersionEngine = window.VersionUtils || {
       bundleMeta.version ||
       "-"
     ).trim() || "-";
+  }
+};
+
+const RemoteSourceEngine = window.RemoteSourceUtils || {
+  buildCacheBustUrl(url, cacheMode) {
+    const target = String(url || "").trim();
+    if (!target) return "";
+    const mode = String(cacheMode || "hourly").toLowerCase();
+    const now = new Date();
+    let key = String(now.getTime());
+    if (mode === "hourly") {
+      key = now.toISOString().slice(0, 13).replace(/[-:T]/g, "");
+    } else if (mode === "daily") {
+      key = now.toISOString().slice(0, 10).replace(/-/g, "");
+    }
+    const separator = target.includes("?") ? "&" : "?";
+    return target + separator + "v=" + encodeURIComponent(key);
+  },
+  toRawGithubUrl(url) {
+    const source = String(url || "").trim();
+    const match = source.match(/^https:\/\/cdn\.jsdelivr\.net\/gh\/([^/]+)\/([^@/]+)@([^/]+)\/(.+)$/i);
+    if (!match) return "";
+    return "https://raw.githubusercontent.com/" + match[1] + "/" + match[2] + "/" + match[3] + "/" + match[4];
+  },
+  toJsDelivrUrl(url) {
+    const source = String(url || "").trim();
+    const match = source.match(/^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/i);
+    if (!match) return "";
+    return "https://cdn.jsdelivr.net/gh/" + match[1] + "/" + match[2] + "@" + match[3] + "/" + match[4];
+  },
+  getFetchCandidateUrls(url, options) {
+    const source = String(url || "").trim();
+    if (!source) return [];
+    const opts = options || {};
+    const preferRaw = String(opts.prefer || "").toLowerCase() === "raw";
+    const includeJsDelivr = opts.includeJsDelivr !== false;
+    const rawUrl = this.toRawGithubUrl(source);
+    const jsdelivrUrl = includeJsDelivr ? this.toJsDelivrUrl(source) : "";
+    const urls = [];
+    const pushUnique = (value) => {
+      if (!value || urls.includes(value)) return;
+      urls.push(value);
+    };
+
+    if (preferRaw) {
+      pushUnique(rawUrl || (source.startsWith("https://raw.githubusercontent.com/") ? source : ""));
+      pushUnique(source);
+      pushUnique(jsdelivrUrl);
+      return urls;
+    }
+
+    pushUnique(source);
+    pushUnique(rawUrl);
+    pushUnique(jsdelivrUrl);
+    return urls;
+  },
+  getBundleCandidateUrls(url) {
+    const primary = String(url || "").trim();
+    if (!primary) return [];
+    const urls = [primary];
+    const rawUrl = this.toRawGithubUrl(primary);
+    if (rawUrl && rawUrl !== primary) urls.push(rawUrl);
+    return urls;
   }
 };
 
@@ -351,6 +416,7 @@ window.onload = async function () {
   syncDefaultDiscountButtonSummary();
   syncDefaultDiscountForm(g_DefaultDiscountConfig);
   syncDiscountStepInput(document.getElementById("discountStep").value);
+  requestLayoutMetricsSync();
   renderLoadingState("正在同步远程价格与库存数据");
   updateResultCount();
   const ready = await ensureDataLoaded();
@@ -386,6 +452,7 @@ function setSearchLoading(loading) {
   stockBtn.textContent = stockBtn.dataset.defaultText || "库存查询";
   searchBtn.disabled = false;
   stockBtn.disabled = false;
+  requestLayoutMetricsSync();
 }
 
 function bytesToUtf8(bytes) {
@@ -423,56 +490,83 @@ async function decryptData(base64Data, password) {
 }
 
 function withCacheBust(url, cacheMode) {
-  const mode = String(cacheMode || "hourly").toLowerCase();
-  const now = new Date();
-  let key = String(now.getTime());
-  if (mode === "hourly") {
-    key = now.toISOString().slice(0, 13).replace(/[-:T]/g, "");
-  } else if (mode === "daily") {
-    key = now.toISOString().slice(0, 10).replace(/-/g, "");
-  }
-  const sep = url.includes("?") ? "&" : "?";
-  return url + sep + "v=" + encodeURIComponent(key);
+  return RemoteSourceEngine.buildCacheBustUrl(url, cacheMode);
 }
 
-function loadWindowBundleByScript(url, timeoutMs, globalKey, timeoutErr, loadErr) {
-  const previous = window[globalKey];
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    let done = false;
-    const timer = setTimeout(() => {
-      if (done) return;
-      done = true;
-      script.remove();
-      window[globalKey] = previous;
-      reject(new Error(timeoutErr));
-    }, timeoutMs);
+async function fetchTextWithTimeout(url, timeoutMs, timeoutErr, loadErr) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error(loadErr + " HTTP " + response.status);
+    return await response.text();
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw new Error(timeoutErr);
+    }
+    if (error instanceof Error) throw error;
+    throw new Error(loadErr);
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
 
+function evaluateBundleScriptText(scriptText, globalKey, loadErr) {
+  const previous = window[globalKey];
+  try {
     delete window[globalKey];
-    script.src = url;
-    script.async = true;
-    script.onload = () => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      const bundle = window[globalKey];
-      if (!bundle) {
-        window[globalKey] = previous;
-        reject(new Error(loadErr));
-        return;
-      }
-      resolve(bundle);
-    };
-    script.onerror = () => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      script.remove();
+    const bundle = new Function(
+      "window",
+      scriptText + "\nreturn window['" + globalKey + "'];"
+    )(window);
+    if (!bundle) throw new Error(loadErr);
+    return bundle;
+  } catch (error) {
+    if (error instanceof Error) throw error;
+    throw new Error(loadErr);
+  } finally {
+    if (previous === undefined) {
+      delete window[globalKey];
+    } else {
       window[globalKey] = previous;
-      reject(new Error(loadErr));
-    };
-    document.head.appendChild(script);
-  });
+    }
+  }
+}
+
+async function loadWindowBundleByFetch(url, timeoutMs, globalKey, timeoutErr, loadErr) {
+  const scriptText = await fetchTextWithTimeout(url, timeoutMs, timeoutErr, loadErr);
+  return evaluateBundleScriptText(scriptText, globalKey, loadErr);
+}
+
+async function fetchJsonFromCandidateUrls(urls, timeoutMs, timeoutErr, loadErr, cacheMode) {
+  const candidates = Array.isArray(urls) ? urls.filter(Boolean) : [];
+  let lastError = null;
+
+  for (let i = 0; i < candidates.length; i += 1) {
+    try {
+      const text = await fetchTextWithTimeout(
+        withCacheBust(candidates[i], cacheMode || "request"),
+        timeoutMs,
+        timeoutErr,
+        loadErr
+      );
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error(loadErr);
+      }
+      return {
+        data: parsed,
+        url: candidates[i]
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error(loadErr);
 }
 
 async function parsePriceBundle(priceObj) {
@@ -516,7 +610,7 @@ function getRemotePriceConfig() {
     enabled: !!cfg.enabled,
     manifestUrl: String(cfg.manifestUrl || "").trim(),
     timeoutMs: Number(cfg.timeoutMs) > 0 ? Number(cfg.timeoutMs) : 8000,
-    cacheBust: String(cfg.cacheBust || "hourly")
+    cacheBust: String(cfg.cacheBust || "request")
   };
 }
 
@@ -558,7 +652,7 @@ function applyStockDataset(parsed, source) {
 }
 
 async function loadPriceBundleByScript(url, timeoutMs) {
-  const priceObj = await loadWindowBundleByScript(
+  const priceObj = await loadWindowBundleByFetch(
     url,
     timeoutMs,
     "PRICE_BUNDLE",
@@ -569,7 +663,7 @@ async function loadPriceBundleByScript(url, timeoutMs) {
 }
 
 async function loadStockBundleByScript(url, timeoutMs) {
-  const stockObj = await loadWindowBundleByScript(
+  const stockObj = await loadWindowBundleByFetch(
     url,
     timeoutMs,
     "STOCK_BUNDLE",
@@ -583,15 +677,39 @@ async function loadRemotePriceFromManifest() {
   const cfg = getRemotePriceConfig();
   if (!cfg.enabled || !cfg.manifestUrl) throw new Error("未配置远程价格清单");
 
-  const manifestResp = await fetch(withCacheBust(cfg.manifestUrl, cfg.cacheBust), { cache: "no-store" });
-  if (!manifestResp.ok) throw new Error("远程价格清单加载失败 HTTP " + manifestResp.status);
-
-  const manifest = await manifestResp.json();
+  const manifestResult = await fetchJsonFromCandidateUrls(
+    RemoteSourceEngine.getFetchCandidateUrls(cfg.manifestUrl, {
+      prefer: "raw",
+      includeJsDelivr: true
+    }),
+    cfg.timeoutMs,
+    "远程价格清单加载超时",
+    "远程价格清单加载失败",
+    cfg.cacheBust
+  );
+  const manifest = manifestResult.data;
   const latest = String((manifest && manifest.latest) || "").trim();
   if (!latest) throw new Error("远程价格清单缺少 latest 字段");
 
-  const bundleUrl = new URL(latest, cfg.manifestUrl).href;
-  const parsed = await loadPriceBundleByScript(bundleUrl, cfg.timeoutMs);
+  const bundleUrl = new URL(latest, manifestResult.url).href;
+  const candidateUrls = RemoteSourceEngine.getFetchCandidateUrls(bundleUrl, {
+    prefer: "raw",
+    includeJsDelivr: false
+  });
+  let parsed = null;
+  let lastError = null;
+
+  for (let i = 0; i < candidateUrls.length; i += 1) {
+    const candidateUrl = withCacheBust(candidateUrls[i], "request");
+    try {
+      parsed = await loadPriceBundleByScript(candidateUrl, cfg.timeoutMs);
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (!parsed) throw lastError || new Error("远程价格加载失败");
   return {
     ...parsed,
     manifestMeta: manifest && typeof manifest === "object" ? manifest : null
@@ -601,29 +719,46 @@ async function loadRemotePriceFromManifest() {
 async function loadRemoteStockBundle() {
   const cfg = getRemoteStockConfig();
   if (!cfg.enabled || !cfg.url) throw new Error("未配置远程库存地址");
-  return loadStockBundleByScript(withCacheBust(cfg.url, cfg.cacheBust), cfg.timeoutMs);
-}
-
-async function loadRemoteStockBundle() {
-  const cfg = getRemoteStockConfig();
-  if (!cfg.enabled || !cfg.url) throw new Error("Remote stock bundle URL is not configured");
 
   let manifest = null;
   let bundleUrl = cfg.url;
 
   if (cfg.manifestUrl) {
     try {
-      const manifestResp = await fetch(withCacheBust(cfg.manifestUrl, cfg.cacheBust), { cache: "no-store" });
-      if (manifestResp.ok) {
-        manifest = await manifestResp.json();
-        const latest = String((manifest && manifest.latest) || "").trim();
-        if (latest) bundleUrl = new URL(latest, cfg.manifestUrl).href;
-      }
+      const manifestResult = await fetchJsonFromCandidateUrls(
+        RemoteSourceEngine.getFetchCandidateUrls(cfg.manifestUrl, {
+          prefer: "raw",
+          includeJsDelivr: true
+        }),
+        cfg.timeoutMs,
+        "远程库存清单加载超时",
+        "远程库存清单加载失败",
+        cfg.cacheBust
+      );
+      manifest = manifestResult.data;
+      const latest = String((manifest && manifest.latest) || "").trim();
+      if (latest) bundleUrl = new URL(latest, manifestResult.url).href;
     } catch (error) {
     }
   }
 
-  const parsed = await loadStockBundleByScript(withCacheBust(bundleUrl, cfg.cacheBust), cfg.timeoutMs);
+  const candidateUrls = RemoteSourceEngine.getFetchCandidateUrls(bundleUrl, {
+    prefer: "raw",
+    includeJsDelivr: true
+  });
+  let parsed = null;
+  let lastError = null;
+
+  for (let i = 0; i < candidateUrls.length; i += 1) {
+    try {
+      parsed = await loadStockBundleByScript(withCacheBust(candidateUrls[i], cfg.cacheBust), cfg.timeoutMs);
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (!parsed) throw lastError || new Error("远程库存加载失败");
   return {
     ...parsed,
     manifestMeta: manifest && typeof manifest === "object" ? manifest : null
@@ -634,10 +769,17 @@ async function loadRemoteDefaultDiscountConfig() {
   const cfg = getRemoteDefaultDiscountConfig();
   if (!cfg.enabled || !cfg.url) return null;
 
-  const response = await fetch(withCacheBust(cfg.url, cfg.cacheBust), { cache: "no-store" });
-  if (!response.ok) throw new Error("远程默认折扣加载失败 HTTP " + response.status);
-
-  const payload = await response.json();
+  const payloadResult = await fetchJsonFromCandidateUrls(
+    RemoteSourceEngine.getFetchCandidateUrls(cfg.url, {
+      prefer: "raw",
+      includeJsDelivr: true
+    }),
+    cfg.timeoutMs,
+    "远程默认折扣加载超时",
+    "远程默认折扣加载失败",
+    cfg.cacheBust
+  );
+  const payload = payloadResult.data;
   return DiscountEngine.sanitizeDiscountConfig(
     payload && typeof payload === "object" ? (payload.defaults || payload) : {}
   );
@@ -705,29 +847,12 @@ function updateVersionText() {
     manifestMeta: PRICE_MANIFEST_META,
     bundleMeta: PRICE_META
   });
-  const stockVersion = VersionEngine.pickStockVersion(STOCK_META);
-  versionsEl.textContent = "价格版本: " + priceVersion + " | 库存版本: " + stockVersion;
-  return;
-  const pVer = (PRICE_META && PRICE_META.version) ? PRICE_META.version : "-";
-  const sVer = (STOCK_META && STOCK_META.version) ? STOCK_META.version : "-";
-  const pSrc = PRICE_SOURCE || "未加载";
-  const sSrc = STOCK_SOURCE || "未加载";
-  document.getElementById("versions").textContent =
-    "价格版本: " + pVer + " | 价格来源: " + pSrc + " | 库存版本: " + sVer + " | 库存来源: " + sSrc;
-}
-
-function updateVersionText() {
-  const versionsEl = document.getElementById("versions");
-  if (!versionsEl) return;
-  const priceVersion = VersionEngine.pickPriceVersion({
-    manifestMeta: PRICE_MANIFEST_META,
-    bundleMeta: PRICE_META
-  });
   const stockVersion = VersionEngine.pickStockVersion({
     manifestMeta: STOCK_MANIFEST_META,
     bundleMeta: STOCK_META
   });
-  versionsEl.textContent = "浠锋牸鐗堟湰: " + priceVersion + " | 搴撳瓨鐗堟湰: " + stockVersion;
+  versionsEl.textContent = "价格版本: " + priceVersion + " | 库存版本: " + stockVersion;
+  requestLayoutMetricsSync();
 }
 
 function getQueryLines() {
@@ -809,6 +934,7 @@ function updateSelectionUi() {
   }
 
   syncToggleAllState();
+  requestLayoutMetricsSync();
 }
 
 function renderStateCard(kind, title, message, hint) {
@@ -1348,13 +1474,26 @@ function scrollToTop() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function syncMobileActionDockState() {
-  const toolbarActions = document.querySelector(".toolbar-actions");
-  const backToTopButton = document.getElementById("btnBackToTop");
-  if (!toolbarActions) return;
+function syncLayoutMetrics() {
+  const toolbar = document.querySelector(".toolbar");
+  const rootStyle = document.documentElement.style;
+  const toolbarHeight = toolbar ? Math.ceil(toolbar.getBoundingClientRect().height) : 0;
+  rootStyle.setProperty("--toolbar-stack-height", toolbarHeight + "px");
+}
 
-  const shouldStick = window.innerWidth <= 720 && toolbarActions.getBoundingClientRect().top <= 10;
-  toolbarActions.classList.toggle("is-stuck", shouldStick);
+function requestLayoutMetricsSync() {
+  if (g_LayoutMetricsFrame) return;
+  g_LayoutMetricsFrame = window.requestAnimationFrame(() => {
+    g_LayoutMetricsFrame = null;
+    syncLayoutMetrics();
+  });
+}
+
+function syncMobileActionDockState() {
+  const backToTopButton = document.getElementById("btnBackToTop");
+  const toolbarActions = document.querySelector(".toolbar-actions");
+  if (toolbarActions) toolbarActions.classList.remove("is-stuck");
+  syncLayoutMetrics();
 
   if (backToTopButton) {
     const shouldShowBackTop = window.innerWidth <= 720 && window.scrollY > 260;
@@ -1433,5 +1572,6 @@ function bindUiEvents() {
   window.addEventListener("scroll", syncMobileActionDockState, { passive: true });
   window.addEventListener("resize", syncMobileActionDockState);
   window.requestAnimationFrame(syncMobileActionDockState);
+  requestLayoutMetricsSync();
   updateSelectionUi();
 }
