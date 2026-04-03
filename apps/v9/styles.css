@@ -2330,3 +2330,266 @@ body::after {
     display: none;
   }
 }
+
+/* v9 configurable default discounts */
+
+body.has-overlay {
+  overflow: hidden;
+}
+
+.toolbar-main {
+  grid-template-columns: minmax(0, 1.24fr) minmax(104px, 0.4fr) minmax(112px, 0.44fr);
+  gap: 10px;
+}
+
+.field-group-large,
+.toolbar-main > .field-group:nth-child(2),
+.toolbar-main > .field-group:nth-child(3) {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.toolbar-secondary {
+  display: grid;
+  gap: 8px;
+}
+
+.toolbar-secondary-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.toolbar-secondary .step-presets {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.toolbar-secondary .step-presets::-webkit-scrollbar,
+.toolbar-secondary .toolbar-copy-inline::-webkit-scrollbar {
+  display: none;
+}
+
+.step-preset-action {
+  min-width: 4.9rem;
+  border-color: rgba(18, 108, 105, 0.16);
+  background: linear-gradient(135deg, rgba(18, 108, 105, 0.12), rgba(232, 184, 123, 0.12));
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.toolbar-secondary .toolbar-copy-inline {
+  min-width: 0;
+  width: 100%;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 0;
+  border-top: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.toolbar-secondary .toolbar-copy-inline .opt-lbl {
+  min-height: 1.68rem;
+  padding: 0 0.54rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.discount-config-modal[hidden] {
+  display: none;
+}
+
+.discount-config-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.discount-config-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 35, 44, 0.18);
+  backdrop-filter: blur(12px);
+}
+
+.discount-config-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 560px);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 1.35rem;
+  background: linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(246, 240, 232, 0.96));
+  box-shadow: 0 28px 54px -32px rgba(31, 46, 56, 0.38);
+}
+
+.discount-config-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.discount-config-kicker {
+  margin: 0 0 4px;
+  color: var(--text-faint);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.discount-config-head h2 {
+  margin: 0;
+  font-family: "Fraunces", "STSong", serif;
+  font-size: 1.22rem;
+  line-height: 1;
+}
+
+.discount-config-copy {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.84rem;
+  line-height: 1.52;
+}
+
+.discount-config-close {
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid rgba(31, 48, 60, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-soft);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.discount-config-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.discount-config-field {
+  display: grid;
+  gap: 6px;
+}
+
+.discount-config-field > span {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.discount-config-field .field-shell {
+  min-height: 2.46rem;
+}
+
+.discount-config-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-ghost {
+  border-color: rgba(31, 48, 60, 0.12);
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--text);
+}
+
+@media (max-width: 900px) {
+  .toolbar-main {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .toolbar-secondary-main {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .toolbar-secondary .toolbar-copy-inline {
+    justify-content: flex-start;
+  }
+
+  .discount-config-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .toolbar-main {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .toolbar-secondary {
+    gap: 6px;
+  }
+
+  .toolbar-secondary-main {
+    gap: 6px;
+  }
+
+  .toolbar-secondary .step-presets {
+    gap: 5px;
+    padding-bottom: 2px;
+  }
+
+  .step-preset-action {
+    min-width: 4.4rem;
+  }
+
+  .toolbar-secondary .toolbar-copy-inline .opt-lbl {
+    min-height: 1.56rem;
+    padding: 0 0.46rem;
+    font-size: 0.69rem;
+  }
+
+  .discount-config-modal {
+    padding: 10px;
+  }
+
+  .discount-config-card {
+    gap: 12px;
+    padding: 14px;
+    border-radius: 1rem;
+  }
+
+  .discount-config-grid {
+    gap: 8px;
+  }
+
+  .discount-config-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .discount-config-actions .btn {
+    min-height: 2.2rem;
+    padding: 0 0.42rem;
+    font-size: 0.76rem;
+  }
+
+  .discount-config-field .field-shell,
+  .discount-config-field input {
+    font-size: 16px;
+  }
+}

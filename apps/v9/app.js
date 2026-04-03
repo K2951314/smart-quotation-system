@@ -15,38 +15,80 @@ const HOLD_START_DELAY_MS = 280;
 const HOLD_REPEAT_INTERVAL_MS = 70;
 const MMC_URL = "https://mcweb.mitsubishi-materials.com/concerto-mmsc-ec/login.jsp";
 const MMC_PASSWORD = "%461971#";
+const DEFAULT_DISCOUNT_STORAGE_KEY = "v9-default-discount-config";
 
 const DiscountEngine = window.DiscountUtils || {
+  DEFAULT_DISCOUNT_CONFIG: Object.freeze({
+    ex: 32,
+    osg: 36,
+    mitsubishi: 53,
+    other: 53
+  }),
   DEFAULT_STEP_PERCENT: 0.1,
+  normalizePercent(value, fallback) {
+    const num = Number(value);
+    const safe = Number.isFinite(num) ? num : Number(fallback);
+    const base = Number.isFinite(safe) ? safe : 53;
+    return Math.min(100, Math.max(0, Math.round(base * 100) / 100));
+  },
   sanitizeStepPercent(value) {
     const num = Number(value);
     if (!Number.isFinite(num) || num <= 0) return 0.1;
     return Math.max(0.1, Math.round(num * 100) / 100);
   },
-  getDefaultDiscountPreset(item) {
+  sanitizeDiscountConfig(config) {
+    const source = config || {};
+    return {
+      ex: this.normalizePercent(source.ex, this.DEFAULT_DISCOUNT_CONFIG.ex),
+      osg: this.normalizePercent(source.osg, this.DEFAULT_DISCOUNT_CONFIG.osg),
+      mitsubishi: this.normalizePercent(source.mitsubishi, this.DEFAULT_DISCOUNT_CONFIG.mitsubishi),
+      other: this.normalizePercent(source.other, this.DEFAULT_DISCOUNT_CONFIG.other)
+    };
+  },
+  getDiscountCategory(item) {
     const source = item || {};
     const compact = (value) => String(value || "").replace(/\s+/g, "").toUpperCase();
-    if (compact(source.special).includes("EX活动")) {
-      return { percent: 32, source: "ex-activity", label: "EX活动 32%" };
+    const brandAndSpec = [source.brand, source.spec].filter(Boolean).join(" ");
+    if (compact(source.special).includes("EX活动")) return "ex";
+    if (/OSG/i.test(brandAndSpec)) return "osg";
+    if (/三菱|MITSUBISHI|MMC/i.test(brandAndSpec)) return "mitsubishi";
+    return "other";
+  },
+  getDefaultDiscountPreset(item, config) {
+    const normalized = this.sanitizeDiscountConfig(config);
+    const category = this.getDiscountCategory(item);
+    if (category === "ex") {
+      return { percent: normalized.ex, source: "ex-activity", category, label: "EX活动 " + this.formatDiscountPercent(normalized.ex) };
     }
-    if (compact(source.spec).includes("OSG")) {
-      return { percent: 36, source: "osg", label: "OSG 36%" };
+    if (category === "osg") {
+      return { percent: normalized.osg, source: "osg", category, label: "OSG " + this.formatDiscountPercent(normalized.osg) };
     }
-    return { percent: 53, source: "fallback", label: "默认 53%" };
+    if (category === "mitsubishi") {
+      return { percent: normalized.mitsubishi, source: "mitsubishi", category, label: "三菱 " + this.formatDiscountPercent(normalized.mitsubishi) };
+    }
+    return { percent: normalized.other, source: "fallback", category, label: "其他 " + this.formatDiscountPercent(normalized.other) };
   },
   formatDiscountPercent(value) {
-    const num = Number(value);
-    const normalized = Number.isFinite(num) ? Math.min(100, Math.max(0, Math.round(num * 100) / 100)) : 53;
+    const normalized = this.normalizePercent(value, 53);
     return normalized.toFixed(2).replace(/\.?0+$/, "") + "%";
   },
   shiftDiscountPercent(currentPercent, stepPercent, direction) {
-    const current = Number.isFinite(Number(currentPercent)) ? Number(currentPercent) : 53;
+    const current = this.normalizePercent(currentPercent, 53);
     const step = Number.isFinite(Number(stepPercent)) && Number(stepPercent) > 0 ? Math.max(0.1, Number(stepPercent)) : 0.1;
     const dir = Number(direction) < 0 ? -1 : 1;
     const next = current + step * dir;
     return Math.min(100, Math.max(0, Math.round(next * 100) / 100));
   }
 };
+
+let g_DefaultDiscountConfig = DiscountEngine.sanitizeDiscountConfig
+  ? DiscountEngine.sanitizeDiscountConfig(DiscountEngine.DEFAULT_DISCOUNT_CONFIG)
+  : {
+    ex: 32,
+    osg: 36,
+    mitsubishi: 53,
+    other: 53
+  };
 
 const ResultSortEngine = window.ResultSort || {
   sortResultsBySelection(results) {
@@ -67,8 +109,137 @@ const ResultSortEngine = window.ResultSort || {
   }
 };
 
+function getBaseDefaultDiscountConfig() {
+  return DiscountEngine.sanitizeDiscountConfig
+    ? DiscountEngine.sanitizeDiscountConfig(DiscountEngine.DEFAULT_DISCOUNT_CONFIG)
+    : { ex: 32, osg: 36, mitsubishi: 53, other: 53 };
+}
+
+function loadDefaultDiscountConfig() {
+  const fallback = getBaseDefaultDiscountConfig();
+  try {
+    const raw = window.localStorage.getItem(DEFAULT_DISCOUNT_STORAGE_KEY);
+    if (!raw) return fallback;
+    return DiscountEngine.sanitizeDiscountConfig(JSON.parse(raw));
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function persistDefaultDiscountConfig(config) {
+  try {
+    window.localStorage.setItem(
+      DEFAULT_DISCOUNT_STORAGE_KEY,
+      JSON.stringify(DiscountEngine.sanitizeDiscountConfig(config))
+    );
+  } catch (error) {
+  }
+}
+
+function getDefaultDiscountConfig() {
+  return DiscountEngine.sanitizeDiscountConfig(g_DefaultDiscountConfig);
+}
+
+function getDefaultDiscountConfigSummary(config) {
+  const safeConfig = DiscountEngine.sanitizeDiscountConfig(config);
+  return [
+    "EX " + formatCompactNumber(safeConfig.ex) + "%",
+    "OSG " + formatCompactNumber(safeConfig.osg) + "%",
+    "三菱 " + formatCompactNumber(safeConfig.mitsubishi) + "%",
+    "其他 " + formatCompactNumber(safeConfig.other) + "%"
+  ].join(" / ");
+}
+
+function syncDefaultDiscountForm(config) {
+  const safeConfig = DiscountEngine.sanitizeDiscountConfig(config);
+  const mapping = {
+    defaultDiscountEx: safeConfig.ex,
+    defaultDiscountOsg: safeConfig.osg,
+    defaultDiscountMitsubishi: safeConfig.mitsubishi,
+    defaultDiscountOther: safeConfig.other
+  };
+
+  Object.keys(mapping).forEach((id) => {
+    const input = document.getElementById(id);
+    if (input) input.value = formatCompactNumber(mapping[id]);
+  });
+}
+
+function readDefaultDiscountForm() {
+  return DiscountEngine.sanitizeDiscountConfig({
+    ex: document.getElementById("defaultDiscountEx").value,
+    osg: document.getElementById("defaultDiscountOsg").value,
+    mitsubishi: document.getElementById("defaultDiscountMitsubishi").value,
+    other: document.getElementById("defaultDiscountOther").value
+  });
+}
+
+function syncDefaultDiscountButtonSummary() {
+  const button = document.getElementById("btnDefaultDiscounts");
+  if (!button) return;
+  const summary = getDefaultDiscountConfigSummary(g_DefaultDiscountConfig);
+  button.title = summary;
+  button.setAttribute("aria-label", "默认折扣，当前为 " + summary);
+}
+
+function setDefaultDiscountModalState(open) {
+  const modal = document.getElementById("defaultDiscountModal");
+  if (!modal) return;
+  modal.hidden = !open;
+  document.body.classList.toggle("has-overlay", open);
+}
+
+function openDefaultDiscountConfig() {
+  syncDefaultDiscountForm(g_DefaultDiscountConfig);
+  setDefaultDiscountModalState(true);
+  window.requestAnimationFrame(() => {
+    const input = document.getElementById("defaultDiscountEx");
+    if (input) input.focus();
+  });
+}
+
+function closeDefaultDiscountConfig() {
+  setDefaultDiscountModalState(false);
+}
+
+function resetDefaultDiscountConfig() {
+  syncDefaultDiscountForm(getBaseDefaultDiscountConfig());
+}
+
+function applyDefaultDiscountPresetToRow(row, flash) {
+  if (!row) return;
+  const preset = DiscountEngine.getDefaultDiscountPreset({
+    spec: row.spec,
+    special: row.special,
+    brand: row.brand
+  }, getDefaultDiscountConfig());
+  row.discountPercent = preset.percent;
+  row.discountLabel = preset.label;
+  row.discountCategory = preset.category || "";
+  refreshRowPrice(row, flash === true);
+}
+
+function refreshRowsWithDefaultDiscounts() {
+  g_Results.forEach((row) => {
+    if (!row || row.hasCustomDiscount) return;
+    applyDefaultDiscountPresetToRow(row, false);
+  });
+}
+
+function saveDefaultDiscountConfig() {
+  g_DefaultDiscountConfig = readDefaultDiscountForm();
+  persistDefaultDiscountConfig(g_DefaultDiscountConfig);
+  syncDefaultDiscountButtonSummary();
+  refreshRowsWithDefaultDiscounts();
+  closeDefaultDiscountConfig();
+  showToast("默认折扣已更新");
+}
+
 window.onload = async function () {
+  g_DefaultDiscountConfig = loadDefaultDiscountConfig();
   bindUiEvents();
+  syncDefaultDiscountButtonSummary();
+  syncDefaultDiscountForm(g_DefaultDiscountConfig);
   syncDiscountStepInput(document.getElementById("discountStep").value);
   renderLoadingState("正在同步远程价格与库存数据");
   updateResultCount();
@@ -633,6 +804,7 @@ function syncResultOrder() {
 function applyManualDiscount(id, rawValue) {
   const row = getRowById(id);
   if (!row) return;
+  row.hasCustomDiscount = true;
   row.discountPercent = normalizeDiscountPercent(rawValue, row.discountPercent);
   refreshRowPrice(row, true);
 }
@@ -653,8 +825,9 @@ function getDiscountButtonMarkup(rowId, direction) {
 function appendResultRow(resultList, matchKey, item, shouldCheck, isExact) {
   const preset = DiscountEngine.getDefaultDiscountPreset({
     spec: matchKey,
-    special: item.s || ""
-  });
+    special: item.s || "",
+    brand: item.b || ""
+  }, getDefaultDiscountConfig());
   const settings = getCurrentPriceSettings();
   const priceInfo = calcDiscountedPrice(item.p, preset.percent / 100, settings.decimals, settings.threshold);
   const rowData = {
@@ -662,6 +835,7 @@ function appendResultRow(resultList, matchKey, item, shouldCheck, isExact) {
     orderIndex: g_Results.length,
     code: item.c || "",
     spec: matchKey,
+    brand: item.b || "",
     mnemonic: item.m || "",
     alias: item.a || "",
     price: priceInfo.display,
@@ -671,6 +845,8 @@ function appendResultRow(resultList, matchKey, item, shouldCheck, isExact) {
     stock: item.i || "",
     discountPercent: preset.percent,
     discountLabel: preset.label,
+    discountCategory: preset.category || "",
+    hasCustomDiscount: false,
     checked: shouldCheck
   };
   g_Results.push(rowData);
@@ -778,6 +954,7 @@ async function doRegexSearchConverted() {
 function adjustRowDiscount(id, direction, flash) {
   const row = getRowById(id);
   if (!row) return;
+  row.hasCustomDiscount = true;
   row.discountPercent = DiscountEngine.shiftDiscountPercent(
     row.discountPercent,
     getCurrentDiscountStep(),
@@ -993,6 +1170,24 @@ function syncMobileActionDockState() {
 }
 
 function bindUiEvents() {
+  [
+    { id: "defaultDiscountEx", key: "ex" },
+    { id: "defaultDiscountOsg", key: "osg" },
+    { id: "defaultDiscountMitsubishi", key: "mitsubishi" },
+    { id: "defaultDiscountOther", key: "other" }
+  ].forEach((field) => {
+    const input = document.getElementById(field.id);
+    if (!input) return;
+    input.addEventListener("blur", function () {
+      const normalized = DiscountEngine.sanitizeDiscountConfig({ [field.key]: this.value });
+      this.value = formatCompactNumber(normalized[field.key]);
+    });
+    input.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      saveDefaultDiscountConfig();
+    });
+  });
   document.getElementById("discountStep").addEventListener("input", function () {
     updateStepPresetState(this.value);
   });
@@ -1035,6 +1230,12 @@ function bindUiEvents() {
   window.addEventListener("pointercancel", handleGlobalPointerCancel);
   window.addEventListener("blur", function () {
     stopDiscountPress(false);
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Escape") return;
+    const modal = document.getElementById("defaultDiscountModal");
+    if (!modal || modal.hidden) return;
+    closeDefaultDiscountConfig();
   });
   window.addEventListener("scroll", syncMobileActionDockState, { passive: true });
   window.addEventListener("resize", syncMobileActionDockState);

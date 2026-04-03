@@ -8,9 +8,16 @@
   var FALLBACK_DISCOUNT_PERCENT = 53;
   var OSG_DISCOUNT_PERCENT = 36;
   var EX_ACTIVITY_DISCOUNT_PERCENT = 32;
+  var MITSUBISHI_DISCOUNT_PERCENT = 53;
   var MIN_DISCOUNT_PERCENT = 0;
   var MAX_DISCOUNT_PERCENT = 100;
   var DEFAULT_STEP_PERCENT = 0.1;
+  var DEFAULT_DISCOUNT_CONFIG = Object.freeze({
+    ex: EX_ACTIVITY_DISCOUNT_PERCENT,
+    osg: OSG_DISCOUNT_PERCENT,
+    mitsubishi: MITSUBISHI_DISCOUNT_PERCENT,
+    other: FALLBACK_DISCOUNT_PERCENT,
+  });
 
   function toStringSafe(value) {
     if (value === null || value === undefined) return "";
@@ -46,36 +53,72 @@
     return compactText(haystack).toUpperCase().indexOf(compactText(needle).toUpperCase()) >= 0;
   }
 
-  function getDefaultDiscountPreset(item) {
-    var source = item || {};
-    var special = toStringSafe(source.special);
-    var spec = toStringSafe(source.spec);
-
-    if (includesNormalized(special, "EX活动")) {
-      return {
-        percent: EX_ACTIVITY_DISCOUNT_PERCENT,
-        source: "ex-activity",
-        label: "EX活动 32%",
-      };
-    }
-
-    if (includesNormalized(spec, "OSG")) {
-      return {
-        percent: OSG_DISCOUNT_PERCENT,
-        source: "osg",
-        label: "OSG 36%",
-      };
-    }
-
+  function sanitizeDiscountConfig(config) {
+    var source = config || {};
     return {
-      percent: FALLBACK_DISCOUNT_PERCENT,
-      source: "fallback",
-      label: "默认 53%",
+      ex: normalizePercent(source.ex, DEFAULT_DISCOUNT_CONFIG.ex),
+      osg: normalizePercent(source.osg, DEFAULT_DISCOUNT_CONFIG.osg),
+      mitsubishi: normalizePercent(source.mitsubishi, DEFAULT_DISCOUNT_CONFIG.mitsubishi),
+      other: normalizePercent(source.other, DEFAULT_DISCOUNT_CONFIG.other),
     };
   }
 
-  function getDefaultDiscountPercent(item) {
-    return getDefaultDiscountPreset(item).percent;
+  function getDiscountCategory(item) {
+    var source = item || {};
+    var special = toStringSafe(source.special);
+    var spec = toStringSafe(source.spec);
+    var brand = toStringSafe(source.brand || source.b);
+    var brandAndSpec = brand + " " + spec;
+
+    if (includesNormalized(special, "EX活动")) {
+      return "ex";
+    }
+
+    if (/OSG/i.test(brandAndSpec)) {
+      return "osg";
+    }
+
+    if (/三菱|MITSUBISHI|MMC/i.test(brandAndSpec)) {
+      return "mitsubishi";
+    }
+
+    return "other";
+  }
+
+  function getDiscountLabel(category, percent) {
+    if (category === "ex") return "EX活动 " + formatDiscountPercent(percent);
+    if (category === "osg") return "OSG " + formatDiscountPercent(percent);
+    if (category === "mitsubishi") return "三菱 " + formatDiscountPercent(percent);
+    return "其他 " + formatDiscountPercent(percent);
+  }
+
+  function getDefaultDiscountPreset(item, config) {
+    var normalizedConfig = sanitizeDiscountConfig(config);
+    var category = getDiscountCategory(item);
+    var percent = normalizedConfig.other;
+    var source = "fallback";
+
+    if (category === "ex") {
+      percent = normalizedConfig.ex;
+      source = "ex-activity";
+    } else if (category === "osg") {
+      percent = normalizedConfig.osg;
+      source = "osg";
+    } else if (category === "mitsubishi") {
+      percent = normalizedConfig.mitsubishi;
+      source = "mitsubishi";
+    }
+
+    return {
+      percent: percent,
+      source: source,
+      category: category,
+      label: getDiscountLabel(category, percent),
+    };
+  }
+
+  function getDefaultDiscountPercent(item, config) {
+    return getDefaultDiscountPreset(item, config).percent;
   }
 
   function shiftDiscountPercent(currentPercent, stepPercent, direction) {
@@ -95,9 +138,13 @@
     FALLBACK_DISCOUNT_PERCENT: FALLBACK_DISCOUNT_PERCENT,
     OSG_DISCOUNT_PERCENT: OSG_DISCOUNT_PERCENT,
     EX_ACTIVITY_DISCOUNT_PERCENT: EX_ACTIVITY_DISCOUNT_PERCENT,
+    MITSUBISHI_DISCOUNT_PERCENT: MITSUBISHI_DISCOUNT_PERCENT,
     DEFAULT_STEP_PERCENT: DEFAULT_STEP_PERCENT,
+    DEFAULT_DISCOUNT_CONFIG: DEFAULT_DISCOUNT_CONFIG,
     normalizePercent: normalizePercent,
     sanitizeStepPercent: sanitizeStepPercent,
+    sanitizeDiscountConfig: sanitizeDiscountConfig,
+    getDiscountCategory: getDiscountCategory,
     getDefaultDiscountPreset: getDefaultDiscountPreset,
     getDefaultDiscountPercent: getDefaultDiscountPercent,
     shiftDiscountPercent: shiftDiscountPercent,
