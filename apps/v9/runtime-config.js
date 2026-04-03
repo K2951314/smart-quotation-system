@@ -7,7 +7,7 @@ window.APP_CONFIG = {
   },
   remoteStock: {
     enabled: true,
-    manifestUrl: "https://raw.githubusercontent.com/K2951314/-/stock-data/apps/v9/stock-manifest.json",
+    manifestUrl: "",
     url: "https://raw.githubusercontent.com/K2951314/-/stock-data/apps/v9/stock.bundle.js",
     timeoutMs: 8000,
     cacheBust: "daily",

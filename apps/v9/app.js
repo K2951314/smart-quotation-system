@@ -515,25 +515,25 @@ async function fetchTextWithTimeout(url, timeoutMs, timeoutErr, loadErr) {
 }
 
 function evaluateBundleScriptText(scriptText, globalKey, loadErr) {
-  const previous = window[globalKey];
   try {
-    delete window[globalKey];
-    const bundle = new Function(
-      "window",
-      scriptText + "\nreturn window['" + globalKey + "'];"
-    )(window);
-    if (!bundle) throw new Error(loadErr);
-    return bundle;
+    return JSON.parse(extractWindowBundlePayload(scriptText, globalKey, loadErr));
   } catch (error) {
     if (error instanceof Error) throw error;
     throw new Error(loadErr);
-  } finally {
-    if (previous === undefined) {
-      delete window[globalKey];
-    } else {
-      window[globalKey] = previous;
-    }
   }
+}
+
+function extractWindowBundlePayload(scriptText, globalKey, loadErr) {
+  const source = String(scriptText || "").replace(/^\uFEFF/, "").trim();
+  const escapedGlobalKey = String(globalKey || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(
+    "^\\s*window(?:\\[['\"]" + escapedGlobalKey + "['\"]\\]|\\." + escapedGlobalKey + ")\\s*=\\s*([\\s\\S]+?)\\s*;?\\s*$"
+  );
+  const match = source.match(pattern);
+  if (!match || !match[1]) {
+    throw new Error(loadErr);
+  }
+  return match[1];
 }
 
 async function loadWindowBundleByFetch(url, timeoutMs, globalKey, timeoutErr, loadErr) {
@@ -680,7 +680,7 @@ async function loadRemotePriceFromManifest() {
   const manifestResult = await fetchJsonFromCandidateUrls(
     RemoteSourceEngine.getFetchCandidateUrls(cfg.manifestUrl, {
       prefer: "raw",
-      includeJsDelivr: true
+      includeJsDelivr: false
     }),
     cfg.timeoutMs,
     "远程价格清单加载超时",
@@ -728,7 +728,7 @@ async function loadRemoteStockBundle() {
       const manifestResult = await fetchJsonFromCandidateUrls(
         RemoteSourceEngine.getFetchCandidateUrls(cfg.manifestUrl, {
           prefer: "raw",
-          includeJsDelivr: true
+          includeJsDelivr: false
         }),
         cfg.timeoutMs,
         "远程库存清单加载超时",
@@ -744,7 +744,7 @@ async function loadRemoteStockBundle() {
 
   const candidateUrls = RemoteSourceEngine.getFetchCandidateUrls(bundleUrl, {
     prefer: "raw",
-    includeJsDelivr: true
+    includeJsDelivr: false
   });
   let parsed = null;
   let lastError = null;
@@ -772,7 +772,7 @@ async function loadRemoteDefaultDiscountConfig() {
   const payloadResult = await fetchJsonFromCandidateUrls(
     RemoteSourceEngine.getFetchCandidateUrls(cfg.url, {
       prefer: "raw",
-      includeJsDelivr: true
+      includeJsDelivr: false
     }),
     cfg.timeoutMs,
     "远程默认折扣加载超时",
@@ -1200,7 +1200,7 @@ function appendResultRow(resultList, matchKey, item, shouldCheck, isExact) {
     '<div class="result-side">',
     '<div class="result-metrics">',
     '<div class="metric-inline"><span class="metric-label">面价</span><strong>', escapeHtml(formatCompactNumber(item.p || 0)), '</strong></div>',
-    '<div class="metric-inline metric-inline-accent"><span class="metric-label">含税价</span><strong class="price">', escapeHtml(priceInfo.display), '</strong></div>',
+    '<div class="metric-inline metric-inline-accent"><span class="metric-label">报价</span><strong class="price">', escapeHtml(priceInfo.display), '</strong></div>',
     "</div>",
     '<div class="discount-panel"><div class="discount-stepper" data-id="', rowData.id, '">',
     getDiscountButtonMarkup(rowData.id, -1),
