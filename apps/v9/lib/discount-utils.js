@@ -5,10 +5,10 @@
     root.DiscountUtils = factory();
   }
 })(typeof self !== "undefined" ? self : this, function () {
-  var FALLBACK_DISCOUNT_PERCENT = 53;
+  var FALLBACK_DISCOUNT_PERCENT = 55;
   var OSG_DISCOUNT_PERCENT = 36;
   var EX_ACTIVITY_DISCOUNT_PERCENT = 32;
-  var MITSUBISHI_DISCOUNT_PERCENT = 53;
+  var MITSUBISHI_DISCOUNT_PERCENT = 55;
   var MIN_DISCOUNT_PERCENT = 0;
   var MAX_DISCOUNT_PERCENT = 100;
   var DEFAULT_STEP_PERCENT = 0.1;
@@ -68,6 +68,7 @@
     var special = toStringSafe(source.special);
     var spec = toStringSafe(source.spec);
     var brand = toStringSafe(source.brand || source.b);
+    var name = toStringSafe(source.name || source.n);
     var brandAndSpec = brand + " " + spec;
 
     if (includesNormalized(special, "EX活动")) {
@@ -78,7 +79,7 @@
       return "osg";
     }
 
-    if (/三菱|MITSUBISHI|MMC/i.test(brandAndSpec)) {
+    if (name === "刀具") {
       return "mitsubishi";
     }
 

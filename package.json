@@ -5,6 +5,7 @@
   "description": "v9 pricing/stock split bundle tooling",
   "type": "commonjs",
   "scripts": {
+    "test": "node --test tests/*.test.js tests/*.test.mjs",
     "sync:stock": "node tools/sync_stock_bundle.mjs --config config/system.json --stock-config config/stock-source.json",
     "sync:price": "node tools/sync_price_bundle.mjs --config config/system.json --price-config config/price-source.json --mode encrypted",
     "publish:price": "node tools/publish_price_bundle.mjs --input apps/v9/price.bundle.js --output-root apps/v9",

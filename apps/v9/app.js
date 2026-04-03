@@ -1,6 +1,7 @@
 let PRICE_DATA = { bySpec: {} };
 let STOCK_DATA = { byCode: {} };
 let PRICE_META = null;
+let PRICE_MANIFEST_META = null;
 let STOCK_META = null;
 let PRICE_SOURCE = "未加载";
 let STOCK_SOURCE = "未加载";
@@ -10,6 +11,8 @@ let g_DataReady = false;
 let g_DataLoadingPromise = null;
 let g_ToastTimer = null;
 let g_DiscountPressState = null;
+let g_RemoteDefaultDiscountConfig = null;
+let g_HasLocalDefaultDiscountConfig = false;
 
 const HOLD_START_DELAY_MS = 280;
 const HOLD_REPEAT_INTERVAL_MS = 70;
@@ -81,13 +84,32 @@ const DiscountEngine = window.DiscountUtils || {
   }
 };
 
+const VersionEngine = window.VersionUtils || {
+  pickPriceVersion(input) {
+    const source = input || {};
+    const manifestMeta = source.manifestMeta || {};
+    const bundleMeta = source.bundleMeta || {};
+    return String(
+      manifestMeta.updated_at ||
+      bundleMeta.generated_at ||
+      bundleMeta.version ||
+      "-"
+    ).trim() || "-";
+  },
+  pickStockVersion(meta) {
+    return String(
+      (meta && (meta.generated_at || meta.version)) || "-"
+    ).trim() || "-";
+  }
+};
+
 let g_DefaultDiscountConfig = DiscountEngine.sanitizeDiscountConfig
   ? DiscountEngine.sanitizeDiscountConfig(DiscountEngine.DEFAULT_DISCOUNT_CONFIG)
   : {
     ex: 32,
     osg: 36,
-    mitsubishi: 53,
-    other: 53
+    mitsubishi: 55,
+    other: 55
   };
 
 const ResultSortEngine = window.ResultSort || {
@@ -112,17 +134,28 @@ const ResultSortEngine = window.ResultSort || {
 function getBaseDefaultDiscountConfig() {
   return DiscountEngine.sanitizeDiscountConfig
     ? DiscountEngine.sanitizeDiscountConfig(DiscountEngine.DEFAULT_DISCOUNT_CONFIG)
-    : { ex: 32, osg: 36, mitsubishi: 53, other: 53 };
+    : { ex: 32, osg: 36, mitsubishi: 55, other: 55 };
 }
 
-function loadDefaultDiscountConfig() {
-  const fallback = getBaseDefaultDiscountConfig();
+function getSystemDefaultDiscountConfig() {
+  return DiscountEngine.sanitizeDiscountConfig({
+    ...getBaseDefaultDiscountConfig(),
+    ...(g_RemoteDefaultDiscountConfig || {})
+  });
+}
+
+function loadLocalDefaultDiscountConfig() {
   try {
     const raw = window.localStorage.getItem(DEFAULT_DISCOUNT_STORAGE_KEY);
-    if (!raw) return fallback;
+    if (!raw) {
+      g_HasLocalDefaultDiscountConfig = false;
+      return null;
+    }
+    g_HasLocalDefaultDiscountConfig = true;
     return DiscountEngine.sanitizeDiscountConfig(JSON.parse(raw));
   } catch (error) {
-    return fallback;
+    g_HasLocalDefaultDiscountConfig = false;
+    return null;
   }
 }
 
@@ -132,12 +165,22 @@ function persistDefaultDiscountConfig(config) {
       DEFAULT_DISCOUNT_STORAGE_KEY,
       JSON.stringify(DiscountEngine.sanitizeDiscountConfig(config))
     );
+    g_HasLocalDefaultDiscountConfig = true;
   } catch (error) {
   }
 }
 
 function getDefaultDiscountConfig() {
-  return DiscountEngine.sanitizeDiscountConfig(g_DefaultDiscountConfig);
+  return DiscountEngine.sanitizeDiscountConfig(g_DefaultDiscountConfig || getSystemDefaultDiscountConfig());
+}
+
+function applyRemoteDefaultDiscountConfig(config) {
+  g_RemoteDefaultDiscountConfig = DiscountEngine.sanitizeDiscountConfig(config);
+  if (g_HasLocalDefaultDiscountConfig) return;
+  g_DefaultDiscountConfig = getSystemDefaultDiscountConfig();
+  syncDefaultDiscountButtonSummary();
+  syncDefaultDiscountForm(g_DefaultDiscountConfig);
+  refreshRowsWithDefaultDiscounts();
 }
 
 function getDefaultDiscountConfigSummary(config) {
@@ -203,7 +246,7 @@ function closeDefaultDiscountConfig() {
 }
 
 function resetDefaultDiscountConfig() {
-  syncDefaultDiscountForm(getBaseDefaultDiscountConfig());
+  syncDefaultDiscountForm(getSystemDefaultDiscountConfig());
 }
 
 function applyDefaultDiscountPresetToRow(row, flash) {
@@ -211,7 +254,8 @@ function applyDefaultDiscountPresetToRow(row, flash) {
   const preset = DiscountEngine.getDefaultDiscountPreset({
     spec: row.spec,
     special: row.special,
-    brand: row.brand
+    brand: row.brand,
+    name: row.name
   }, getDefaultDiscountConfig());
   row.discountPercent = preset.percent;
   row.discountLabel = preset.label;
@@ -236,7 +280,7 @@ function saveDefaultDiscountConfig() {
 }
 
 window.onload = async function () {
-  g_DefaultDiscountConfig = loadDefaultDiscountConfig();
+  g_DefaultDiscountConfig = loadLocalDefaultDiscountConfig() || getSystemDefaultDiscountConfig();
   bindUiEvents();
   syncDefaultDiscountButtonSummary();
   syncDefaultDiscountForm(g_DefaultDiscountConfig);
@@ -406,7 +450,7 @@ function getRemotePriceConfig() {
     enabled: !!cfg.enabled,
     manifestUrl: String(cfg.manifestUrl || "").trim(),
     timeoutMs: Number(cfg.timeoutMs) > 0 ? Number(cfg.timeoutMs) : 8000,
-    cacheBust: String(cfg.cacheBust || "daily")
+    cacheBust: String(cfg.cacheBust || "hourly")
   };
 }
 
@@ -420,9 +464,20 @@ function getRemoteStockConfig() {
   };
 }
 
+function getRemoteDefaultDiscountConfig() {
+  const cfg = (window.APP_CONFIG && window.APP_CONFIG.defaultDiscount) || {};
+  return {
+    enabled: !!cfg.enabled,
+    url: String(cfg.url || "").trim(),
+    timeoutMs: Number(cfg.timeoutMs) > 0 ? Number(cfg.timeoutMs) : 4000,
+    cacheBust: String(cfg.cacheBust || "hourly")
+  };
+}
+
 function applyPriceDataset(parsed, source) {
   PRICE_DATA = { bySpec: parsed.bySpec || {} };
   PRICE_META = parsed.meta || null;
+  PRICE_MANIFEST_META = parsed.manifestMeta || null;
   PRICE_SOURCE = source;
   updateVersionText();
 }
@@ -468,13 +523,30 @@ async function loadRemotePriceFromManifest() {
   if (!latest) throw new Error("远程价格清单缺少 latest 字段");
 
   const bundleUrl = new URL(latest, cfg.manifestUrl).href;
-  return loadPriceBundleByScript(bundleUrl, cfg.timeoutMs);
+  const parsed = await loadPriceBundleByScript(bundleUrl, cfg.timeoutMs);
+  return {
+    ...parsed,
+    manifestMeta: manifest && typeof manifest === "object" ? manifest : null
+  };
 }
 
 async function loadRemoteStockBundle() {
   const cfg = getRemoteStockConfig();
   if (!cfg.enabled || !cfg.url) throw new Error("未配置远程库存地址");
   return loadStockBundleByScript(withCacheBust(cfg.url, cfg.cacheBust), cfg.timeoutMs);
+}
+
+async function loadRemoteDefaultDiscountConfig() {
+  const cfg = getRemoteDefaultDiscountConfig();
+  if (!cfg.enabled || !cfg.url) return null;
+
+  const response = await fetch(withCacheBust(cfg.url, cfg.cacheBust), { cache: "no-store" });
+  if (!response.ok) throw new Error("远程默认折扣加载失败 HTTP " + response.status);
+
+  const payload = await response.json();
+  return DiscountEngine.sanitizeDiscountConfig(
+    payload && typeof payload === "object" ? (payload.defaults || payload) : {}
+  );
 }
 
 async function ensureDataLoaded() {
@@ -485,12 +557,14 @@ async function ensureDataLoaded() {
     setSearchLoading(true);
     setStatus("正在同步远程数据", "info");
     try {
-      const [remotePrice, remoteStock] = await Promise.all([
+      const [remotePrice, remoteStock, remoteDefaultDiscountConfig] = await Promise.all([
         loadRemotePriceFromManifest(),
-        loadRemoteStockBundle()
+        loadRemoteStockBundle(),
+        loadRemoteDefaultDiscountConfig().catch(() => null)
       ]);
       applyPriceDataset(remotePrice, "远程(manifest)");
       applyStockDataset(remoteStock, "远程(stock-data)");
+      if (remoteDefaultDiscountConfig) applyRemoteDefaultDiscountConfig(remoteDefaultDiscountConfig);
       rebuildMergedDB();
       g_DataReady = true;
       setStatus("数据已加载", "ok");
@@ -531,6 +605,15 @@ function rebuildMergedDB() {
 }
 
 function updateVersionText() {
+  const versionsEl = document.getElementById("versions");
+  if (!versionsEl) return;
+  const priceVersion = VersionEngine.pickPriceVersion({
+    manifestMeta: PRICE_MANIFEST_META,
+    bundleMeta: PRICE_META
+  });
+  const stockVersion = VersionEngine.pickStockVersion(STOCK_META);
+  versionsEl.textContent = "价格版本: " + priceVersion + " | 库存版本: " + stockVersion;
+  return;
   const pVer = (PRICE_META && PRICE_META.version) ? PRICE_META.version : "-";
   const sVer = (STOCK_META && STOCK_META.version) ? STOCK_META.version : "-";
   const pSrc = PRICE_SOURCE || "未加载";
@@ -826,7 +909,8 @@ function appendResultRow(resultList, matchKey, item, shouldCheck, isExact) {
   const preset = DiscountEngine.getDefaultDiscountPreset({
     spec: matchKey,
     special: item.s || "",
-    brand: item.b || ""
+    brand: item.b || "",
+    name: item.n || ""
   }, getDefaultDiscountConfig());
   const settings = getCurrentPriceSettings();
   const priceInfo = calcDiscountedPrice(item.p, preset.percent / 100, settings.decimals, settings.threshold);
@@ -836,6 +920,7 @@ function appendResultRow(resultList, matchKey, item, shouldCheck, isExact) {
     code: item.c || "",
     spec: matchKey,
     brand: item.b || "",
+    name: item.n || "",
     mnemonic: item.m || "",
     alias: item.a || "",
     price: priceInfo.display,
