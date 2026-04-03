@@ -9,6 +9,7 @@
     "sync:stock": "node tools/sync_stock_bundle.mjs --config config/system.json --stock-config config/stock-source.json",
     "sync:price": "node tools/sync_price_bundle.mjs --config config/system.json --price-config config/price-source.json --mode encrypted",
     "publish:price": "node tools/publish_price_bundle.mjs --input apps/v9/price.bundle.js --output-root apps/v9",
+    "publish:stock": "node tools/publish_stock_bundle.mjs --input apps/v9/stock.bundle.js --output-root apps/v9",
     "doctor": "node scripts/doctor.mjs"
   },
   "dependencies": {

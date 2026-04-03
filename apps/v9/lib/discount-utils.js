@@ -71,7 +71,7 @@
     var name = toStringSafe(source.name || source.n);
     var brandAndSpec = brand + " " + spec;
 
-    if (includesNormalized(special, "EX活动")) {
+    if (includesNormalized(special, "\u0045\u0058\u6d3b\u52a8")) {
       return "ex";
     }
 
@@ -79,7 +79,7 @@
       return "osg";
     }
 
-    if (name === "刀具") {
+    if (name === "\u5200\u5177") {
       return "mitsubishi";
     }
 
@@ -87,10 +87,10 @@
   }
 
   function getDiscountLabel(category, percent) {
-    if (category === "ex") return "EX活动 " + formatDiscountPercent(percent);
+    if (category === "ex") return "\u0045\u0058\u6d3b\u52a8 " + formatDiscountPercent(percent);
     if (category === "osg") return "OSG " + formatDiscountPercent(percent);
-    if (category === "mitsubishi") return "三菱 " + formatDiscountPercent(percent);
-    return "其他 " + formatDiscountPercent(percent);
+    if (category === "mitsubishi") return "\u4e09\u83f1 " + formatDiscountPercent(percent);
+    return "\u5176\u4ed6 " + formatDiscountPercent(percent);
   }
 
   function getDefaultDiscountPreset(item, config) {

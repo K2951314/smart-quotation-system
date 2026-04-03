@@ -24,10 +24,13 @@ function run() {
   assertExists(system.app.web_root);
   assertExists(system.sync.script_path);
   assertExists("tools/sync_price_bundle.mjs");
+  assertExists("tools/publish_price_bundle.mjs");
+  assertExists("tools/publish_stock_bundle.mjs");
   assertExists("merger/lib/data-utils.js");
   assertExists(".github/workflows/sync-stock.yml");
   assertExists(".github/workflows/sync-price.yml");
   assertExists(".github/workflows/ci.yml");
+  assertExists("apps/v9/default-discount.json");
 
   if (!Array.isArray(stockSource.allowed_content_types) || !stockSource.allowed_content_types.length) {
     throw new Error("config/stock-source.json: allowed_content_types is required");

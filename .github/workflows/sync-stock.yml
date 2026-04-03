@@ -59,7 +59,6 @@ jobs:
 
       - name: Publish stock bundle to stock-data branch
         run: |
-          TARGET=$(node -e "const c=require('./config/system.json'); process.stdout.write(c.app.stock_bundle_path)")
           ARTIFACT="tmp/stock.bundle.js"
           if [ ! -f "$ARTIFACT" ]; then
             echo "Stock artifact not found: $ARTIFACT"
@@ -68,32 +67,18 @@ jobs:
 
           git fetch origin "$STOCK_BRANCH" || true
           WORKTREE_DIR=$(mktemp -d)
-          BRANCH_EXISTS=0
           if git show-ref --verify --quiet "refs/remotes/origin/$STOCK_BRANCH"; then
-            BRANCH_EXISTS=1
             git worktree add -B "$STOCK_BRANCH" "$WORKTREE_DIR" "origin/$STOCK_BRANCH"
           else
             git worktree add -B "$STOCK_BRANCH" "$WORKTREE_DIR"
           fi
 
-          mkdir -p "$WORKTREE_DIR/$(dirname "$TARGET")"
-          if [ -f "$WORKTREE_DIR/$TARGET" ] && cmp -s "$ARTIFACT" "$WORKTREE_DIR/$TARGET"; then
-            echo "No stock bundle changes"
-            if [ "$BRANCH_EXISTS" = "0" ]; then
-              cd "$WORKTREE_DIR"
-              git push origin HEAD:"$STOCK_BRANCH"
-              cd - >/dev/null
-            fi
-            git worktree remove "$WORKTREE_DIR" --force
-            exit 0
-          fi
-
-          cp "$ARTIFACT" "$WORKTREE_DIR/$TARGET"
+          node tools/publish_stock_bundle.mjs --input "$GITHUB_WORKSPACE/$ARTIFACT" --output-root "$WORKTREE_DIR/apps/v9"
           cd "$WORKTREE_DIR"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$TARGET"
+          git add apps/v9/stock.bundle.js apps/v9/stock-manifest.json
           if git diff --cached --quiet; then
             echo "No staged changes"
             cd - >/dev/null

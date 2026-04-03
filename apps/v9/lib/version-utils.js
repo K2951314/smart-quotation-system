@@ -11,13 +11,25 @@
     return text || "";
   }
 
+  function getManifestMeta(source) {
+    return source.manifestMeta || source.manifest || {};
+  }
+
+  function getBundleMeta(source) {
+    if (source.bundleMeta || source.bundle) {
+      return source.bundleMeta || source.bundle || {};
+    }
+    return source || {};
+  }
+
   function pickPriceVersion(input) {
     var source = input || {};
-    var manifestMeta = source.manifestMeta || source.manifest || {};
-    var bundleMeta = source.bundleMeta || source.bundle || {};
+    var manifestMeta = getManifestMeta(source);
+    var bundleMeta = getBundleMeta(source);
 
     return (
       normalizeVersion(manifestMeta.updated_at) ||
+      normalizeVersion(manifestMeta.content_updated_at) ||
       normalizeVersion(bundleMeta.generated_at) ||
       normalizeVersion(bundleMeta.version) ||
       "-"
@@ -25,11 +37,15 @@
   }
 
   function pickStockVersion(input) {
-    var meta = input || {};
+    var source = input || {};
+    var manifestMeta = getManifestMeta(source);
+    var bundleMeta = getBundleMeta(source);
 
     return (
-      normalizeVersion(meta.generated_at) ||
-      normalizeVersion(meta.version) ||
+      normalizeVersion(manifestMeta.updated_at) ||
+      normalizeVersion(manifestMeta.content_updated_at) ||
+      normalizeVersion(bundleMeta.generated_at) ||
+      normalizeVersion(bundleMeta.version) ||
       "-"
     );
   }

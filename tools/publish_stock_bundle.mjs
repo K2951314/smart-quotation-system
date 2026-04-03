@@ -6,8 +6,9 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, "..");
-const DEFAULT_INPUT = "apps/v9/price.bundle.js";
+const DEFAULT_INPUT = "apps/v9/stock.bundle.js";
 const DEFAULT_OUTPUT_ROOT = "apps/v9";
+const RELATIVE_LATEST = "stock.bundle.js";
 
 function resolveFromRoot(inputPath) {
   if (path.isAbsolute(inputPath)) return inputPath;
@@ -71,7 +72,7 @@ async function readTextSafe(filePath) {
   }
 }
 
-export async function publishPriceBundle(options) {
+export async function publishStockBundle(options) {
   const opts = options || {};
   const inputPath = resolveFromRoot(opts.input || DEFAULT_INPUT);
   const outputRoot = resolveFromRoot(opts.outputRoot || DEFAULT_OUTPUT_ROOT);
@@ -79,10 +80,8 @@ export async function publishPriceBundle(options) {
   const inputBytes = await readFile(inputPath);
   const inputText = inputBytes.toString("utf8");
   const hash = hashBytes(inputBytes);
-  const shortHash = hash.slice(0, 12);
-  const relativeLatest = `price/price.${shortHash}.bundle.js`;
-  const latestPath = path.join(outputRoot, relativeLatest);
-  const manifestPath = path.join(outputRoot, "price-manifest.json");
+  const latestPath = path.join(outputRoot, RELATIVE_LATEST);
+  const manifestPath = path.join(outputRoot, "stock-manifest.json");
   const nowIso = resolveIsoTimestamp(opts.now);
 
   const existingManifest = await readJsonSafe(manifestPath);
@@ -92,17 +91,17 @@ export async function publishPriceBundle(options) {
   const contentChanged = !(
     existingManifest &&
     existingManifest.hash === hash &&
-    String(existingManifest.latest || "") === relativeLatest &&
+    String(existingManifest.latest || "") === RELATIVE_LATEST &&
     existingLatestText === inputText
   );
 
   if (contentChanged) {
-    await mkdir(path.dirname(latestPath), { recursive: true });
+    await mkdir(outputRoot, { recursive: true });
     await writeFile(latestPath, inputBytes);
   }
 
   const manifest = {
-    latest: relativeLatest,
+    latest: RELATIVE_LATEST,
     hash,
     updated_at: nowIso,
     content_updated_at: contentChanged
@@ -122,7 +121,7 @@ export async function publishPriceBundle(options) {
     contentChanged,
     manifestChanged,
     hash,
-    latest: relativeLatest,
+    latest: RELATIVE_LATEST,
     manifestPath,
     bundlePath: latestPath,
     updatedAt: manifest.updated_at,
@@ -133,16 +132,16 @@ export async function publishPriceBundle(options) {
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === __filename;
 if (isCli) {
   const args = parseArgs(process.argv.slice(2));
-  publishPriceBundle(args)
+  publishStockBundle(args)
     .then((res) => {
       const contentState = res.contentChanged ? "updated" : "unchanged";
       const manifestState = res.manifestChanged ? "updated" : "unchanged";
       console.log(
-        `[publish-price] content=${contentState} manifest=${manifestState} hash=${res.hash} latest=${res.latest} manifest_path=${res.manifestPath}`,
+        `[publish-stock] content=${contentState} manifest=${manifestState} hash=${res.hash} latest=${res.latest} manifest_path=${res.manifestPath}`,
       );
     })
     .catch((err) => {
-      console.error(`[publish-price] failed: ${err.message}`);
+      console.error(`[publish-stock] failed: ${err.message}`);
       process.exit(1);
     });
 }

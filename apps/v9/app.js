@@ -2,6 +2,7 @@ let PRICE_DATA = { bySpec: {} };
 let STOCK_DATA = { byCode: {} };
 let PRICE_META = null;
 let PRICE_MANIFEST_META = null;
+let STOCK_MANIFEST_META = null;
 let STOCK_META = null;
 let PRICE_SOURCE = "未加载";
 let STOCK_SOURCE = "未加载";
@@ -24,14 +25,14 @@ const DiscountEngine = window.DiscountUtils || {
   DEFAULT_DISCOUNT_CONFIG: Object.freeze({
     ex: 32,
     osg: 36,
-    mitsubishi: 53,
-    other: 53
+    mitsubishi: 55,
+    other: 55
   }),
   DEFAULT_STEP_PERCENT: 0.1,
   normalizePercent(value, fallback) {
     const num = Number(value);
     const safe = Number.isFinite(num) ? num : Number(fallback);
-    const base = Number.isFinite(safe) ? safe : 53;
+    const base = Number.isFinite(safe) ? safe : 55;
     return Math.min(100, Math.max(0, Math.round(base * 100) / 100));
   },
   sanitizeStepPercent(value) {
@@ -72,11 +73,11 @@ const DiscountEngine = window.DiscountUtils || {
     return { percent: normalized.other, source: "fallback", category, label: "其他 " + this.formatDiscountPercent(normalized.other) };
   },
   formatDiscountPercent(value) {
-    const normalized = this.normalizePercent(value, 53);
+    const normalized = this.normalizePercent(value, 55);
     return normalized.toFixed(2).replace(/\.?0+$/, "") + "%";
   },
   shiftDiscountPercent(currentPercent, stepPercent, direction) {
-    const current = this.normalizePercent(currentPercent, 53);
+    const current = this.normalizePercent(currentPercent, 55);
     const step = Number.isFinite(Number(stepPercent)) && Number(stepPercent) > 0 ? Math.max(0.1, Number(stepPercent)) : 0.1;
     const dir = Number(direction) < 0 ? -1 : 1;
     const next = current + step * dir;
@@ -91,16 +92,81 @@ const VersionEngine = window.VersionUtils || {
     const bundleMeta = source.bundleMeta || {};
     return String(
       manifestMeta.updated_at ||
+      manifestMeta.content_updated_at ||
       bundleMeta.generated_at ||
       bundleMeta.version ||
       "-"
     ).trim() || "-";
   },
-  pickStockVersion(meta) {
+  pickStockVersion(input) {
+    const source = input || {};
+    const manifestMeta = source.manifestMeta || {};
+    const bundleMeta = source.bundleMeta || source;
     return String(
-      (meta && (meta.generated_at || meta.version)) || "-"
+      manifestMeta.updated_at ||
+      manifestMeta.content_updated_at ||
+      bundleMeta.generated_at ||
+      bundleMeta.version ||
+      "-"
     ).trim() || "-";
   }
+};
+
+DiscountEngine.DEFAULT_DISCOUNT_CONFIG = Object.freeze({
+  ex: 32,
+  osg: 36,
+  mitsubishi: 55,
+  other: 55
+});
+DiscountEngine.normalizePercent = function (value, fallback) {
+  const num = Number(value);
+  const safe = Number.isFinite(num) ? num : Number(fallback);
+  const base = Number.isFinite(safe) ? safe : 55;
+  return Math.min(100, Math.max(0, Math.round(base * 100) / 100));
+};
+DiscountEngine.sanitizeDiscountConfig = function (config) {
+  const source = config || {};
+  return {
+    ex: this.normalizePercent(source.ex, this.DEFAULT_DISCOUNT_CONFIG.ex),
+    osg: this.normalizePercent(source.osg, this.DEFAULT_DISCOUNT_CONFIG.osg),
+    mitsubishi: this.normalizePercent(source.mitsubishi, this.DEFAULT_DISCOUNT_CONFIG.mitsubishi),
+    other: this.normalizePercent(source.other, this.DEFAULT_DISCOUNT_CONFIG.other)
+  };
+};
+DiscountEngine.getDiscountCategory = function (item) {
+  const source = item || {};
+  const compact = (value) => String(value || "").replace(/\s+/g, "").toUpperCase();
+  const brandAndSpec = [source.brand, source.spec].filter(Boolean).join(" ");
+  const name = String(source.name || source.n || "").trim();
+  if (compact(source.special).includes("\u0045\u0058\u6d3b\u52a8")) return "ex";
+  if (/OSG/i.test(brandAndSpec)) return "osg";
+  if (name === "\u5200\u5177") return "mitsubishi";
+  return "other";
+};
+DiscountEngine.formatDiscountPercent = function (value) {
+  const normalized = this.normalizePercent(value, 55);
+  return normalized.toFixed(2).replace(/\.?0+$/, "") + "%";
+};
+DiscountEngine.getDefaultDiscountPreset = function (item, config) {
+  const normalized = this.sanitizeDiscountConfig(config);
+  const category = this.getDiscountCategory(item);
+  if (category === "ex") {
+    return { percent: normalized.ex, source: "ex-activity", category, label: "\u0045\u0058\u6d3b\u52a8 " + this.formatDiscountPercent(normalized.ex) };
+  }
+  if (category === "osg") {
+    return { percent: normalized.osg, source: "osg", category, label: "OSG " + this.formatDiscountPercent(normalized.osg) };
+  }
+  if (category === "mitsubishi") {
+    return { percent: normalized.mitsubishi, source: "mitsubishi", category, label: "\u4e09\u83f1 " + this.formatDiscountPercent(normalized.mitsubishi) };
+  }
+  return { percent: normalized.other, source: "fallback", category, label: "\u5176\u4ed6 " + this.formatDiscountPercent(normalized.other) };
+};
+DiscountEngine.shiftDiscountPercent = function (currentPercent, stepPercent, direction) {
+  const current = this.normalizePercent(currentPercent, 55);
+  const step = Number.isFinite(Number(stepPercent)) && Number(stepPercent) > 0 ? Math.max(0.1, Number(stepPercent)) : 0.1;
+  const dir = Number(direction) < 0 ? -1 : 1;
+  const next = current + step * dir;
+  return Math.min(100, Math.max(0, Math.round(next * 100) / 100));
 };
 
 let g_DefaultDiscountConfig = DiscountEngine.sanitizeDiscountConfig
@@ -458,6 +524,7 @@ function getRemoteStockConfig() {
   const cfg = (window.APP_CONFIG && window.APP_CONFIG.remoteStock) || {};
   return {
     enabled: !!cfg.enabled,
+    manifestUrl: String(cfg.manifestUrl || "").trim(),
     url: String(cfg.url || "").trim(),
     timeoutMs: Number(cfg.timeoutMs) > 0 ? Number(cfg.timeoutMs) : 8000,
     cacheBust: String(cfg.cacheBust || "daily")
@@ -485,6 +552,7 @@ function applyPriceDataset(parsed, source) {
 function applyStockDataset(parsed, source) {
   STOCK_DATA = { byCode: parsed.byCode || {} };
   STOCK_META = parsed.meta || null;
+  STOCK_MANIFEST_META = parsed.manifestMeta || null;
   STOCK_SOURCE = source;
   updateVersionText();
 }
@@ -534,6 +602,32 @@ async function loadRemoteStockBundle() {
   const cfg = getRemoteStockConfig();
   if (!cfg.enabled || !cfg.url) throw new Error("未配置远程库存地址");
   return loadStockBundleByScript(withCacheBust(cfg.url, cfg.cacheBust), cfg.timeoutMs);
+}
+
+async function loadRemoteStockBundle() {
+  const cfg = getRemoteStockConfig();
+  if (!cfg.enabled || !cfg.url) throw new Error("Remote stock bundle URL is not configured");
+
+  let manifest = null;
+  let bundleUrl = cfg.url;
+
+  if (cfg.manifestUrl) {
+    try {
+      const manifestResp = await fetch(withCacheBust(cfg.manifestUrl, cfg.cacheBust), { cache: "no-store" });
+      if (manifestResp.ok) {
+        manifest = await manifestResp.json();
+        const latest = String((manifest && manifest.latest) || "").trim();
+        if (latest) bundleUrl = new URL(latest, cfg.manifestUrl).href;
+      }
+    } catch (error) {
+    }
+  }
+
+  const parsed = await loadStockBundleByScript(withCacheBust(bundleUrl, cfg.cacheBust), cfg.timeoutMs);
+  return {
+    ...parsed,
+    manifestMeta: manifest && typeof manifest === "object" ? manifest : null
+  };
 }
 
 async function loadRemoteDefaultDiscountConfig() {
@@ -620,6 +714,20 @@ function updateVersionText() {
   const sSrc = STOCK_SOURCE || "未加载";
   document.getElementById("versions").textContent =
     "价格版本: " + pVer + " | 价格来源: " + pSrc + " | 库存版本: " + sVer + " | 库存来源: " + sSrc;
+}
+
+function updateVersionText() {
+  const versionsEl = document.getElementById("versions");
+  if (!versionsEl) return;
+  const priceVersion = VersionEngine.pickPriceVersion({
+    manifestMeta: PRICE_MANIFEST_META,
+    bundleMeta: PRICE_META
+  });
+  const stockVersion = VersionEngine.pickStockVersion({
+    manifestMeta: STOCK_MANIFEST_META,
+    bundleMeta: STOCK_META
+  });
+  versionsEl.textContent = "浠锋牸鐗堟湰: " + priceVersion + " | 搴撳瓨鐗堟湰: " + stockVersion;
 }
 
 function getQueryLines() {

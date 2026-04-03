@@ -1,42 +1,40 @@
 # v9 智能询价系统
 
-## 架构说明
+## 结构
 - 页面入口：`apps/v9/index.html`
-- Netlify 继续发布 `apps/v9`
-- 大数据文件继续走 GitHub CDN，避免把高频变更流量压到 Netlify
+- Netlify 发布根目录：`apps/v9`
+- 远程数据继续走 GitHub CDN，避免把频繁变更的数据流量压回 Netlify
   - 价格：`stock-data/apps/v9/price-manifest.json` -> `price/price.<hash>.bundle.js`
-  - 库存：`stock-data/apps/v9/stock.bundle.js`
-  - 默认折扣：`stock-data/apps/v9/default-discount.json`
-- `apps/v9` 不再保存本地 `price.bundle.js`、`stock.bundle.js`
+  - 库存：`stock-data/apps/v9/stock-manifest.json` -> `stock.bundle.js`
+  - 默认折扣：`main/apps/v9/default-discount.json`
 
-## 页面行为
-- 页面打开时立即加载远程价格、库存和默认折扣配置
-- 顶部版本栏只显示：`价格版本 | 库存版本`
+## 版本显示
+- 顶部只显示：`价格版本 | 库存版本`
 - 价格版本优先显示 `price-manifest.json.updated_at`
-- 库存版本优先显示 `stock.bundle.js.meta.generated_at`
-- 查询结果的默认折扣优先级：
-  - 本地弹窗保存值
-  - GitHub 远程默认折扣
-  - 内置默认值
+- 库存版本优先显示 `stock-manifest.json.updated_at`
+- 如果 manifest 不可用，再回退 bundle 的 `generated_at/version`
 
-## 默认折扣规则
-- `EX活动`：按活动规则命中
-- `OSG`：按品牌/规格中的 `OSG` 命中
-- `三菱`：名称列严格等于 `刀具`
-- `其他`：其余结果
+### manifest 语义
+- `updated_at`：最近一次工作流成功发布到远程的时间
+- `content_updated_at`：内容哈希真正变化的时间
+- 这样即使数据内容没变，只要工作流成功跑完，页面版本也会刷新
 
-内置默认值：
-- `EX = 32%`
-- `OSG = 36%`
-- `三菱 = 55%`
-- `其他 = 55%`
+## 默认折扣
+- 分类顺序：`EX活动 -> OSG -> 三菱 -> 其他`
+- 三菱判断：名称列严格等于 `刀具`
+- 内置默认值：
+  - `EX = 32%`
+  - `OSG = 36%`
+  - `三菱 = 55%`
+  - `其他 = 55%`
+- 生效优先级：`本地保存 > GitHub 远程默认值 > 内置默认值`
 
-### GitHub 远程默认折扣格式
-在 `stock-data/apps/v9/default-discount.json` 中维护：
+### 远程默认折扣文件
+在 `apps/v9/default-discount.json` 维护：
 
 ```json
 {
-  "updated_at": "2026-04-03T10:00:00.000Z",
+  "updated_at": "2026-04-03T11:00:00.000Z",
   "defaults": {
     "ex": 32,
     "osg": 36,
@@ -46,39 +44,17 @@
 }
 ```
 
-说明：
-- `defaults` 可只写需要覆盖的字段
-- 本地已经手动保存过默认折扣时，页面不会被远程值强制覆盖
-- 点击“恢复默认”时，会恢复到“远程默认值或内置默认值”
-
-## 价格加密
-- 推荐工作流：`Sync Price Bundle`
-- `mode=encrypted` 需要 Secret `PRICE_BUNDLE_PASSWORD`
-- `mode=plain` 不加密
-- 不再使用 Excel `Password Sheet`
-
-## 必要配置
-- `config/system.json`
-- `config/stock-source.json`
-- `config/stock-source.schema.json`
-- `config/price-source.json`
-- `config/price-source.schema.json`
-
-## 必要 Secrets
-- `STOCK_SOURCE_URL`
-- `STOCK_SOURCE_TOKEN`
-- `PRICE_SOURCE_URL`
-- `PRICE_SOURCE_TOKEN`
-- `PRICE_BUNDLE_PASSWORD`（仅 `encrypted` 模式需要）
-
 ## 工作流
-- `.github/workflows/sync-stock.yml`
-  - 定时同步库存到 `stock-data`
 - `.github/workflows/sync-price.yml`
-  - 定时同步价格到 `stock-data`
-  - 支持手动运行并选择 `encrypted/plain`
+  - 拉取源价格文件
+  - 生成 `tmp/price.bundle.js`
+  - 发布到 `stock-data/apps/v9/price-manifest.json`
+- `.github/workflows/sync-stock.yml`
+  - 拉取源库存文件
+  - 生成 `tmp/stock.bundle.js`
+  - 发布到 `stock-data/apps/v9/stock-manifest.json`
 - `.github/workflows/publish-price.yml`
-  - 手动发布本地价格包到 `stock-data`
+  - 手动把本地价格包发布到 `stock-data`
 
 ## 本地命令
 ```bash
@@ -87,20 +63,6 @@ npm test
 npm run doctor
 npm run sync:stock
 npm run sync:price
+npm run publish:stock
+npm run publish:price
 ```
-
-## 链接校验
-远程源必须指向可下载文件/API，而不是网页：
-
-```powershell
-curl.exe -L -o NUL -w "http:%{http_code} type:%{content_type}`n" "在线表格链接"
-```
-
-通过标准：
-- `http:200`
-- `type` 不是 `text/html`
-
-## 调整频率
-修改以下工作流里的 `cron`：
-- `.github/workflows/sync-stock.yml`
-- `.github/workflows/sync-price.yml`
