@@ -61,15 +61,11 @@
             <button type="button" class="step-preset" data-step="0.5" onclick="setDiscountStepPreset(this)">0.5</button>
             <button type="button" class="step-preset" data-step="1" onclick="setDiscountStepPreset(this)">1</button>
             <button id="btnDefaultDiscounts" type="button" class="step-preset step-preset-action" onclick="openDefaultDiscountConfig()">默认折扣</button>
-          </div>
-
-          <div class="result-panel-actions toolbar-result-actions">
+            <div class="result-stat"><strong id="resultCount">0</strong><span>条结果</span></div>
             <label class="select-all-toggle">
               <input id="toggleAllResults" type="checkbox" onchange="toggleAll(this)">
               <span>全选</span>
             </label>
-            <div class="result-stat"><strong id="resultCount">0</strong><span>结果</span></div>
-            <div class="result-stat is-accent"><strong id="selectedCount">0</strong><span>勾选</span></div>
           </div>
         </div>
 

@@ -1404,7 +1404,7 @@ function doCopy() {
     if (showCode) line1Parts.push(row.code);
     if (showSpec) line1Parts.push(row.spec);
     if (showPrice) line1Parts.push("含税" + row.price);
-    if (showSpecial && row.special) line1Parts.push("特价:" + row.special);
+    if (showSpecial && row.special) line1Parts.push(row.special);
     if (showStock && row.stock) line1Parts.push(row.stock);
 
     text += line1Parts.join(" ") + "\n";
