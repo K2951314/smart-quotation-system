@@ -1,21 +1,21 @@
 window.APP_CONFIG = {
   remotePrice: {
     enabled: true,
-    manifestUrl: "https://raw.githubusercontent.com/K2951314/-/stock-data/apps/v9/price-manifest.json",
-    timeoutMs: 80000,
-    cacheBust: "request",
+    manifestUrl: "https://cdn.jsdelivr.net/gh/K2951314/smart-quotation-system@data/price.bundle.XXXX.js",
+    timeoutMs: 20000,
+    cacheBust: "none",
   },
   remoteStock: {
     enabled: true,
     manifestUrl: "",
-    url: "https://raw.githubusercontent.com/K2951314/-/stock-data/apps/v9/stock.bundle.js",
-    timeoutMs: 80000,
+    url: "https://cdn.jsdelivr.net/gh/K2951314/smart-quotation-system@data/stock.bundle.XXXX.js",
+    timeoutMs: 20000,
     cacheBust: "daily",
   },
   defaultDiscount: {
     enabled: true,
-    url: "https://raw.githubusercontent.com/K2951314/-/main/apps/v9/default-discount.json",
-    timeoutMs: 40000,
+    url: "https://cdn.jsdelivr.net/gh/K2951314/smart-quotation-system@data/config.json",
+    timeoutMs: 10000,
     cacheBust: "hourly",
   },
 };

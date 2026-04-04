@@ -1,10 +1,13 @@
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import vm from "node:vm";
-import { fileURLToPath } from "node:url";
+import path from "path";
+import { fileURLToPath } from "url";
 
+const cwd = process.cwd();
+const defaultOutputPath = path.resolve(cwd, "data", "stock.bundle.js");
+const outputPath = options.output || defaultOutputPath;
 const require = createRequire(import.meta.url);
 const DataUtils = require("../merger/lib/data-utils");
 const BundleUtils = require("../merger/lib/bundle-utils");

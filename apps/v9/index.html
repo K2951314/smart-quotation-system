@@ -61,7 +61,7 @@
             <button type="button" class="step-preset" data-step="0.5" onclick="setDiscountStepPreset(this)">0.5</button>
             <button type="button" class="step-preset" data-step="1" onclick="setDiscountStepPreset(this)">1</button>
             <button id="btnDefaultDiscounts" type="button" class="step-preset step-preset-action" onclick="openDefaultDiscountConfig()">默认折扣</button>
-            <div class="result-stat"><strong id="resultCount">0</strong><span>条结果</span></div>
+            <div class="result-stat"><strong id="resultCount">0</strong><span>结果</span></div>
             <label class="select-all-toggle">
               <input id="toggleAllResults" type="checkbox" onchange="toggleAll(this)">
               <span>全选</span>
@@ -163,9 +163,15 @@
 <script src="./lib/query-regex.js"></script>
 <script src="./lib/discount-utils.js"></script>
 <script src="./lib/result-sort.js"></script>
-<script src="./lib/remote-source-utils.js"></script>
 <script src="./lib/version-utils.js"></script>
-<script src="runtime-config.js"></script>
+<!-- ✅ 预加载（秒开关键） -->
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/gh/K2951314/smart-quotation-system@data/price.bundle.XXXX.js">
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/gh/K2951314/smart-quotation-system@data/stock.bundle.XXXX.js">
+
+<!-- ✅ 正式加载 -->
+<script defer src="https://cdn.jsdelivr.net/gh/K2951314/smart-quotation-system@data/price.bundle.XXXX.js"></script>
+<script defer src="https://cdn.jsdelivr.net/gh/K2951314/smart-quotation-system@data/stock.bundle.XXXX.js"></script>
+<meta http-equiv="Cache-Control" content="public, max-age=31536000, immutable">
 <script src="./app.js"></script>
 </body>
 </html>
