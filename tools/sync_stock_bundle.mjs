@@ -6,7 +6,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const cwd = process.cwd();
-const defaultOutputPath = path.resolve(cwd, "data", "stock.bundle.js");
 const require = createRequire(import.meta.url);
 const DataUtils = require("../merger/lib/data-utils");
 const BundleUtils = require("../merger/lib/bundle-utils");
@@ -349,7 +348,7 @@ function buildStockBundleScript(byCode, sourceUrl, dataHash, sourceMeta) {
 
 export async function resolveRuntimeConfig(options) {
   const opts = options || {};
-  const args = parseArgs(opts.argv || []);
+  const args = parseArgs(opts.argv || process.argv.slice(2));
   const systemConfig = await loadJsonFile(opts.configPath || args.configPath);
   validateSystemConfig(systemConfig);
 
@@ -370,7 +369,7 @@ export async function resolveRuntimeConfig(options) {
     args,
     systemConfig,
     stockConfig: mergedStock,
-    outputPath: resolveFromRoot(opts.outputPath || args.outputPath || systemConfig.app.stock_bundle_path),
+    outputPath: path.resolve(cwd, args.outputPath || systemConfig.app.stock_bundle_path || "data/stock.bundle.js"),
   };
 }
 
@@ -382,7 +381,6 @@ export async function syncStockBundle(options) {
   const allowedKinds = runtime.stockConfig.allowed_content_types.map((x) => String(x).toLowerCase());
   const timeoutMs = Number(runtime.stockConfig.timeout_ms);
   const maxBytes = Number(runtime.stockConfig.max_bytes);
-  const outputPath = opts.outputPath || runtime.outputPath;
   const existing = await readExistingBundleInfo(outputPath);
 
   const controller = new AbortController();

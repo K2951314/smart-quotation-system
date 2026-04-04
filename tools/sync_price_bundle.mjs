@@ -6,7 +6,6 @@ import vm from "node:vm";
 import { fileURLToPath } from "url";
 
 const cwd = process.cwd();
-const defaultOutputPath = path.resolve(cwd, "data", "price.bundle.js");
 const require = createRequire(import.meta.url);
 const DataUtils = require("../merger/lib/data-utils");
 const BundleUtils = require("../merger/lib/bundle-utils");
@@ -410,7 +409,7 @@ function buildPriceBundleScript(bySpec, mode, password, sourceUrl, dataHash, sou
 
 export async function resolveRuntimeConfig(options) {
   const opts = options || {};
-  const args = parseArgs(opts.argv || []);
+  const args = parseArgs(opts.argv || process.argv.slice(2)); // 确保读取了命令行参数
   const systemConfig = await loadJsonFile(opts.configPath || args.configPath);
   validateSystemConfig(systemConfig);
 
@@ -437,7 +436,8 @@ export async function resolveRuntimeConfig(options) {
     args,
     systemConfig,
     priceConfig: merged,
-    outputPath: resolveFromRoot(opts.outputPath || args.outputPath || systemConfig.app.price_bundle_path),
+    // 这里是关键：优先使用命令行传入的 --output，否则用配置文件里的，再否则用默认值
+    outputPath: path.resolve(cwd, args.outputPath || systemConfig.app.price_bundle_path || "data/price.bundle.js"),
     mode,
     pricePassword: password,
   };
@@ -452,7 +452,6 @@ export async function syncPriceBundle(options) {
   const timeoutMs = Number(runtime.priceConfig.timeout_ms);
   const maxBytes = Number(runtime.priceConfig.max_bytes);
   const mode = resolveMode(opts.mode || runtime.mode);
-  const outputPath = opts.outputPath || runtime.outputPath;
   const password = String(runtime.pricePassword || "");
   if (mode === "encrypted" && !password) {
     throw new Error("Missing PRICE_BUNDLE_PASSWORD for encrypted mode");
