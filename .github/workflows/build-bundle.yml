@@ -1,0 +1,76 @@
+name: Build Price & Stock Bundle
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Checkout data
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: data
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+
+      - name: Generate bundle
+        run: |
+          node tools/sync_price_bundle.mjs
+          node tools/sync_stock_bundle.mjs
+
+      - name: Generate hash
+        id: hash
+        run: |
+          PRICE_HASH=$(md5sum price.bundle.js | cut -c1-8)
+          STOCK_HASH=$(md5sum stock.bundle.js | cut -c1-8)
+
+          echo "price=$PRICE_HASH" >> $GITHUB_OUTPUT
+          echo "stock=$STOCK_HASH" >> $GITHUB_OUTPUT
+
+      - name: Rename
+        run: |
+          mv price.bundle.js price.bundle.${{ steps.hash.outputs.price }}.js
+          mv stock.bundle.js stock.bundle.${{ steps.hash.outputs.stock }}.js
+
+      - name: Commit data
+        run: |
+          cd data
+          git config user.name "bot"
+          git config user.email "bot@example.com"
+
+          rm -f *.bundle.*.js   # 🔥 防止堆积
+          cp ../price.bundle.*.js .
+          cp ../stock.bundle.*.js .
+
+          git add .
+          git commit -m "update bundle" || echo "no change"
+          git push
+
+      - name: Update index.html
+        run: |
+          sed -i "s|price.bundle.*.js|price.bundle.${{ steps.hash.outputs.price }}.js|g" apps/v9/index.html
+          sed -i "s|stock.bundle.*.js|stock.bundle.${{ steps.hash.outputs.stock }}.js|g" apps/v9/index.html
+
+      - name: Commit main
+        run: |
+          git config user.name "bot"
+          git config user.email "bot@example.com"
+
+          git add apps/v9/index.html
+          git commit -m "update bundle ref" || echo "no change"
+          git push
