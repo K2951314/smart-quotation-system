@@ -2,25 +2,40 @@ name: Build Price & Stock Bundle
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "price bundle mode"
+        required: false
+        type: choice
+        default: encrypted
+        options:
+          - encrypted
+          - plain
   schedule:
     - cron: "0 */6 * * *"
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      PRICE_MODE: ${{ github.event.inputs.mode || 'encrypted' }}
 
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
         with:
           ref: main
+
       - name: Debug env
         env:
           PRICE_SOURCE_URL: ${{ secrets.PRICE_SOURCE_URL }}
           STOCK_SOURCE_URL: ${{ secrets.STOCK_SOURCE_URL }}
+          PRICE_MODE: ${{ github.event.inputs.mode || 'encrypted' }}
         run: |
           echo "PRICE_SOURCE_URL set? ${PRICE_SOURCE_URL:+yes}"
           echo "STOCK_SOURCE_URL set? ${STOCK_SOURCE_URL:+yes}"
+          echo "PRICE_MODE=$PRICE_MODE"
+
       - name: Checkout data
         uses: actions/checkout@v4
         with:
@@ -38,8 +53,14 @@ jobs:
         env:
           PRICE_SOURCE_URL: ${{ secrets.PRICE_SOURCE_URL }}
           STOCK_SOURCE_URL: ${{ secrets.STOCK_SOURCE_URL }}
+          PRICE_BUNDLE_PASSWORD: ${{ secrets.PRICE_BUNDLE_PASSWORD }}
+          PRICE_MODE: ${{ github.event.inputs.mode || 'encrypted' }}
         run: |
-          node tools/sync_price_bundle.mjs
+          if [ "$PRICE_MODE" = "encrypted" ] && [ -z "${PRICE_BUNDLE_PASSWORD}" ]; then
+            echo "PRICE_BUNDLE_PASSWORD is required for encrypted price bundle"
+            exit 1
+          fi
+          node tools/sync_price_bundle.mjs --mode "$PRICE_MODE"
           node tools/sync_stock_bundle.mjs
 
       - name: Generate hash
@@ -59,8 +80,8 @@ jobs:
       - name: Commit data
         run: |
           cd data
-          git config user.name "尘思"
-          git config user.email "K2951314@163.com"
+          git config user.name "bot"
+          git config user.email "bot@example.com"
 
           rm -f *.bundle.*.js   # 🔥 防止堆积
           cp ../price.bundle.*.js .
@@ -77,8 +98,8 @@ jobs:
 
       - name: Commit main
         run: |
-          git config user.name "bot"
-          git config user.email "bot@example.com"
+          git config user.name "尘思"
+          git config user.email "K2951314@163.com"
 
           git add apps/v9/index.html
           git commit -m "update bundle ref" || echo "no change"
