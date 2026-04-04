@@ -55,8 +55,8 @@ jobs:
       - name: Commit data
         run: |
           cd data
-          git config user.name "bot"
-          git config user.email "bot@example.com"
+          git config user.name "尘思"
+          git config user.email "K2951314@163.com"
 
           rm -f *.bundle.*.js   # 🔥 防止堆积
           cp ../price.bundle.*.js .
