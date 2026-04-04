@@ -29,6 +29,9 @@ jobs:
       - run: npm install
 
       - name: Generate bundle
+        env:
+          PRICE_SOURCE_URL: ${{ secrets.PRICE_SOURCE_URL }}
+          STOCK_SOURCE_URL: ${{ secrets.STOCK_SOURCE_URL }}
         run: |
           node tools/sync_price_bundle.mjs
           node tools/sync_stock_bundle.mjs
