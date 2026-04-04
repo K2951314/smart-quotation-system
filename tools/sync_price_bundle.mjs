@@ -406,6 +406,7 @@ function buildPriceBundleScript(bySpec, mode, password, sourceUrl, dataHash, sou
   });
 }
 
+
 export async function resolveRuntimeConfig(options) {
   const opts = options || {};
   const args = parseArgs(opts.argv || process.argv.slice(2));
@@ -417,8 +418,6 @@ export async function resolveRuntimeConfig(options) {
   try { priceRaw = await loadJsonFile(opts.priceConfigPath || args.priceConfigPath); } catch (e) {}
 
   const merged = normalizePriceConfig(priceRaw);
-
-  // 【核心修复】强制读取 Github Action 传进来的环境变量，覆盖掉空配置
   merged.price_source_url = String(process.env.PRICE_SOURCE_URL || merged.price_source_url || "").trim();
   merged.price_source_token = String(process.env.PRICE_SOURCE_TOKEN || merged.price_source_token || "").trim();
 
@@ -429,8 +428,13 @@ export async function resolveRuntimeConfig(options) {
   let finalOutputPath = args.outputPath || (systemConfig.app && systemConfig.app.price_bundle_path) || "data/price.bundle.js";
   finalOutputPath = path.isAbsolute(finalOutputPath) ? finalOutputPath : path.resolve(process.cwd(), finalOutputPath);
 
-  const mode = resolveMode(opts.mode || args.mode);
+  let mode = resolveMode(opts.mode || args.mode);
   const password = String(process.env.PRICE_BUNDLE_PASSWORD || "").trim();
+
+  // 【智能兜底】：如果你没设密码，强制走 plain 公开版，绝不报错
+  if (mode === "encrypted" && !password) {
+    mode = "plain";
+  }
 
   return {
     args,
@@ -441,6 +445,7 @@ export async function resolveRuntimeConfig(options) {
     pricePassword: password,
   };
 }
+
 export async function syncPriceBundle(options) {
   const opts = options || {};
   const runtime = opts.runtime || (await resolveRuntimeConfig(opts));
@@ -449,11 +454,16 @@ export async function syncPriceBundle(options) {
   const allowedKinds = runtime.priceConfig.allowed_content_types.map((x) => String(x).toLowerCase());
   const timeoutMs = Number(runtime.priceConfig.timeout_ms);
   const maxBytes = Number(runtime.priceConfig.max_bytes);
-  const mode = resolveMode(opts.mode || runtime.mode);
+  let mode = resolveMode(opts.mode || runtime.mode);
+  const outputPath = opts.outputPath || runtime.outputPath;
   const password = String(runtime.pricePassword || "");
+
+  // 【智能兜底】：二次拦截，杜绝 throw new Error
   if (mode === "encrypted" && !password) {
-    throw new Error("Missing PRICE_BUNDLE_PASSWORD for encrypted mode");
+    console.warn("[sync-price] 提示: 选择了加密模式但未配置密码，自动降级为公开版(plain)打包。");
+    mode = "plain";
   }
+
   const existingBundle = await readExistingBundle(outputPath);
 
   const baseHeaders = {};
@@ -503,8 +513,8 @@ export async function syncPriceBundle(options) {
   const bySpec = (dataset && dataset.bySpec) || {};
   const dataHash = hashBySpec(bySpec);
 
-  const existingBySpec = await decodeExistingBySpec(existingBundle, mode, password);
-  if (existingBySpec && hashBySpec(existingBySpec) === dataHash) {
+  const existingBySpec2 = await decodeExistingBySpec(existingBundle, mode, password);
+  if (existingBySpec2 && hashBySpec(existingBySpec2) === dataHash) {
     const existingMeta = (existingBundle && existingBundle.meta) || {};
     return {
       outputPath,
