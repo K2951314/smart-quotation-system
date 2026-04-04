@@ -7,7 +7,6 @@ import { fileURLToPath } from "url";
 
 const cwd = process.cwd();
 const defaultOutputPath = path.resolve(cwd, "data", "stock.bundle.js");
-const outputPath = options.output || defaultOutputPath;
 const require = createRequire(import.meta.url);
 const DataUtils = require("../merger/lib/data-utils");
 const BundleUtils = require("../merger/lib/bundle-utils");

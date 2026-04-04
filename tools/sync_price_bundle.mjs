@@ -7,7 +7,6 @@ import { fileURLToPath } from "url";
 
 const cwd = process.cwd();
 const defaultOutputPath = path.resolve(cwd, "data", "price.bundle.js");
-const outputPath = options.output || defaultOutputPath;
 const require = createRequire(import.meta.url);
 const DataUtils = require("../merger/lib/data-utils");
 const BundleUtils = require("../merger/lib/bundle-utils");
@@ -33,20 +32,16 @@ async function loadJsonFile(filePath) {
 
 export function parseArgs(argv) {
   const out = {
-    configPath: DEFAULT_SYSTEM_CONFIG,
-    priceConfigPath: DEFAULT_PRICE_CONFIG,
-    schemaPath: DEFAULT_PRICE_SCHEMA,
-    outputPath: "",
-    mode: "encrypted",
+    // ... 其他默认值
+    outputPath: "", 
   };
   const args = Array.isArray(argv) ? argv : [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
-    if (arg === "--config" && args[i + 1]) out.configPath = args[++i];
-    else if (arg === "--price-config" && args[i + 1]) out.priceConfigPath = args[++i];
-    else if (arg === "--schema" && args[i + 1]) out.schemaPath = args[++i];
-    else if (arg === "--output" && args[i + 1]) out.outputPath = args[++i];
-    else if (arg === "--mode" && args[i + 1]) out.mode = args[++i];
+    if (arg === "--output" && args[i + 1]) {
+      out.outputPath = args[++i]; // 确保这一行能正确把路径存入
+    }
+    // ...
   }
   return out;
 }

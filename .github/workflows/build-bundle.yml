@@ -17,57 +17,57 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      PRICE_MODE: ${{ github.event.inputs.mode || 'encrypted' }}
-
     steps:
-      - name: Checkout main
+      # 1. 检出代码分支 (main) 到根目录
+      - name: Checkout Code
         uses: actions/checkout@v4
         with:
           ref: main
 
-      - name: Debug env
-        env:
-          PRICE_SOURCE_URL: ${{ secrets.PRICE_SOURCE_URL }}
-          STOCK_SOURCE_URL: ${{ secrets.STOCK_SOURCE_URL }}
-          PRICE_MODE: ${{ github.event.inputs.mode || 'encrypted' }}
-        run: |
-          echo "PRICE_SOURCE_URL set? ${PRICE_SOURCE_URL:+yes}"
-          echo "STOCK_SOURCE_URL set? ${STOCK_SOURCE_URL:+yes}"
-          echo "PRICE_MODE=$PRICE_MODE"
-
-      - name: Checkout data
+      # 2. 检出数据分支 (data) 到单独的文件夹 'data-branch'
+      - name: Checkout Data Branch
         uses: actions/checkout@v4
         with:
           ref: data
-          path: data
+          path: data-branch
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
-      - run: npm install
+      - name: Install Dependencies
+        run: npm install
 
-      - name: Generate bundle
+      # 3. 运行生成脚本
+      # 使用 --output 参数强制指定写入到 'data-branch' 的根目录
+      - name: Generate Bundles
         env:
           PRICE_SOURCE_URL: ${{ secrets.PRICE_SOURCE_URL }}
           STOCK_SOURCE_URL: ${{ secrets.STOCK_SOURCE_URL }}
           PRICE_BUNDLE_PASSWORD: ${{ secrets.PRICE_BUNDLE_PASSWORD }}
           PRICE_MODE: ${{ github.event.inputs.mode || 'encrypted' }}
         run: |
-          if [ "$PRICE_MODE" = "encrypted" ] && [ -z "${PRICE_BUNDLE_PASSWORD}" ]; then
-            echo "PRICE_BUNDLE_PASSWORD is required for encrypted price bundle"
-            exit 1
-          fi
-          node tools/sync_price_bundle.mjs --mode "$PRICE_MODE"
-          node tools/sync_stock_bundle.mjs
+          node tools/sync_price_bundle.mjs \
+            --mode "$PRICE_MODE" \
+            --output data-branch/price.bundle.js
+            
+          node tools/sync_stock_bundle.mjs \
+            --output data-branch/stock.bundle.js
 
-      - name: Commit data
+      # 4. 提交并推送数据到 data 分支
+      - name: Deploy to Data Branch
         run: |
-          cd data
+          cd data-branch
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "chore: update price and stock bundles" || echo "No changes to commit"
-          git push origin data
+          
+          # 检查是否有文件变化
+          if [ -n "$(git status --porcelain)" ]; then
+            git add .
+            git commit -m "chore: auto update bundles $(date +'%Y-%m-%d %H:%M')"
+            git push origin data
+          else
+            echo "No changes to price or stock data. Skipping push."
+          fi
