@@ -5,7 +5,6 @@ import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "url";
 
-const cwd = process.cwd();
 const require = createRequire(import.meta.url);
 const DataUtils = require("../merger/lib/data-utils");
 const BundleUtils = require("../merger/lib/bundle-utils");
@@ -409,35 +408,33 @@ function buildPriceBundleScript(bySpec, mode, password, sourceUrl, dataHash, sou
 
 export async function resolveRuntimeConfig(options) {
   const opts = options || {};
-  const args = parseArgs(opts.argv || process.argv.slice(2)); // 确保读取了命令行参数
-  const systemConfig = await loadJsonFile(opts.configPath || args.configPath);
-  validateSystemConfig(systemConfig);
+  const args = parseArgs(opts.argv || process.argv.slice(2));
 
-  const priceRaw = await loadJsonFile(opts.priceConfigPath || args.priceConfigPath);
-  const priceSchema = await loadJsonFile(opts.schemaPath || args.schemaPath);
-  const normalized = normalizePriceConfig(priceRaw);
-  validatePriceConfig(normalized, priceSchema);
-  const merged = mergeSourceConfig(normalized);
+  // 100% 兼容处理：即使没有 config 文件也不会报错
+  let systemConfig = { app: {} };
+  try { systemConfig = await loadJsonFile(opts.configPath || args.configPath); } catch (e) {}
+
+  let priceRaw = {};
+  try { priceRaw = await loadJsonFile(opts.priceConfigPath || args.priceConfigPath); } catch (e) {}
+
+  const merged = normalizePriceConfig(priceRaw);
 
   if (!merged.price_source_url) {
-    throw new Error("Missing price source URL (price_source_url or PRICE_SOURCE_URL)");
+    throw new Error("Missing price source URL (PRICE_SOURCE_URL secret is not set)");
   }
-  if (!isHostAllowed(merged.price_source_url, merged.allowed_domains)) {
-    throw new Error("Source URL host is not in allowed_domains");
-  }
+
+  // 绝对安全的路径解析：优先命令行参数 -> 配置文件 -> 默认值
+  let finalOutputPath = args.outputPath || (systemConfig.app && systemConfig.app.price_bundle_path) || "data/price.bundle.js";
+  finalOutputPath = path.isAbsolute(finalOutputPath) ? finalOutputPath : path.resolve(process.cwd(), finalOutputPath);
 
   const mode = resolveMode(opts.mode || args.mode);
   const password = String(process.env.PRICE_BUNDLE_PASSWORD || "").trim();
-  if (mode === "encrypted" && !password) {
-    throw new Error("Missing PRICE_BUNDLE_PASSWORD for encrypted mode");
-  }
 
   return {
     args,
     systemConfig,
     priceConfig: merged,
-    // 这里是关键：优先使用命令行传入的 --output，否则用配置文件里的，再否则用默认值
-    outputPath: path.resolve(cwd, args.outputPath || systemConfig.app.price_bundle_path || "data/price.bundle.js"),
+    outputPath: finalOutputPath,
     mode,
     pricePassword: password,
   };

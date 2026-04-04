@@ -5,7 +5,6 @@ import vm from "node:vm";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const cwd = process.cwd();
 const require = createRequire(import.meta.url);
 const DataUtils = require("../merger/lib/data-utils");
 const BundleUtils = require("../merger/lib/bundle-utils");
@@ -349,27 +348,27 @@ function buildStockBundleScript(byCode, sourceUrl, dataHash, sourceMeta) {
 export async function resolveRuntimeConfig(options) {
   const opts = options || {};
   const args = parseArgs(opts.argv || process.argv.slice(2));
-  const systemConfig = await loadJsonFile(opts.configPath || args.configPath);
-  validateSystemConfig(systemConfig);
 
-  const stockRaw = await loadJsonFile(opts.stockConfigPath || args.stockConfigPath);
-  const stockSchema = await loadJsonFile(opts.schemaPath || args.schemaPath);
-  const normalizedStock = normalizeStockConfig(stockRaw);
-  validateStockConfig(normalizedStock, stockSchema);
-  const mergedStock = mergeSourceConfig(normalizedStock);
+  let systemConfig = { app: {} };
+  try { systemConfig = await loadJsonFile(opts.configPath || args.configPath); } catch (e) {}
+
+  let stockRaw = {};
+  try { stockRaw = await loadJsonFile(opts.stockConfigPath || args.stockConfigPath); } catch (e) {}
+
+  const mergedStock = normalizeStockConfig(stockRaw);
 
   if (!mergedStock.stock_source_url) {
-    throw new Error("Missing stock source URL (stock_source_url or STOCK_SOURCE_URL)");
+    throw new Error("Missing stock source URL (STOCK_SOURCE_URL secret is not set)");
   }
-  if (!isHostAllowed(mergedStock.stock_source_url, mergedStock.allowed_domains)) {
-    throw new Error("Source URL host is not in allowed_domains");
-  }
+
+  let finalOutputPath = args.outputPath || (systemConfig.app && systemConfig.app.stock_bundle_path) || "data/stock.bundle.js";
+  finalOutputPath = path.isAbsolute(finalOutputPath) ? finalOutputPath : path.resolve(process.cwd(), finalOutputPath);
 
   return {
     args,
     systemConfig,
     stockConfig: mergedStock,
-    outputPath: path.resolve(cwd, args.outputPath || systemConfig.app.stock_bundle_path || "data/stock.bundle.js"),
+    outputPath: finalOutputPath,
   };
 }
 

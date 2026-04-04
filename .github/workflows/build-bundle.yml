@@ -18,13 +18,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 1. 检出代码分支 (main) 到根目录
+      # 1. 检出带有脚本的 main 分支
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           ref: main
 
-      # 2. 检出数据分支 (data) 到单独的文件夹 'data-branch'
+      # 2. 将 data 分支检出到一个隔离的文件夹 data-branch
       - name: Checkout Data Branch
         uses: actions/checkout@v4
         with:
@@ -35,13 +35,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Install Dependencies
         run: npm install
 
-      # 3. 运行生成脚本
-      # 使用 --output 参数强制指定写入到 'data-branch' 的根目录
+      # 3. 运行脚本，强制利用 --output 写到 data-branch 根目录下！
       - name: Generate Bundles
         env:
           PRICE_SOURCE_URL: ${{ secrets.PRICE_SOURCE_URL }}
@@ -49,25 +47,23 @@ jobs:
           PRICE_BUNDLE_PASSWORD: ${{ secrets.PRICE_BUNDLE_PASSWORD }}
           PRICE_MODE: ${{ github.event.inputs.mode || 'encrypted' }}
         run: |
-          node tools/sync_price_bundle.mjs \
-            --mode "$PRICE_MODE" \
-            --output data-branch/price.bundle.js
-            
-          node tools/sync_stock_bundle.mjs \
-            --output data-branch/stock.bundle.js
+          node tools/sync_price_bundle.mjs --mode "$PRICE_MODE" --output data-branch/price.bundle.js
+          node tools/sync_stock_bundle.mjs --output data-branch/stock.bundle.js
 
-      # 4. 提交并推送数据到 data 分支
+      # 4. 只提交这2个JS文件推送到 data 分支
       - name: Deploy to Data Branch
         run: |
           cd data-branch
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          # 检查是否有文件变化
-          if [ -n "$(git status --porcelain)" ]; then
-            git add .
+          # 仅添加生成的静态数据文件
+          git add price.bundle.js stock.bundle.js
+          
+          # 判断文件是否有更新，有更新才推送
+          if ! git diff --staged --quiet; then
             git commit -m "chore: auto update bundles $(date +'%Y-%m-%d %H:%M')"
             git push origin data
           else
-            echo "No changes to price or stock data. Skipping push."
+            echo "No data changes detected. Skipping push."
           fi
