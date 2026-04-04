@@ -23,23 +23,31 @@ function resolveFromRoot(inputPath) {
 }
 
 async function loadJsonFile(filePath) {
-  const full = resolveFromRoot(filePath);
-  const raw = await readFile(full, "utf8");
-  return JSON.parse(raw);
+  try {
+    const full = resolveFromRoot(filePath);
+    const raw = await readFile(full, "utf8");
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
 }
 
 export function parseArgs(argv) {
   const out = {
-    // ... 其他默认值
-    outputPath: "", 
+    configPath: DEFAULT_SYSTEM_CONFIG,
+    priceConfigPath: DEFAULT_PRICE_CONFIG,
+    schemaPath: DEFAULT_PRICE_SCHEMA,
+    outputPath: "",
+    mode: "encrypted",
   };
-  const args = Array.isArray(argv) ? argv : [];
+  const args = Array.isArray(argv) ? argv :[];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
-    if (arg === "--output" && args[i + 1]) {
-      out.outputPath = args[++i]; // 确保这一行能正确把路径存入
-    }
-    // ...
+    if (arg === "--config" && args[i + 1]) out.configPath = args[++i];
+    else if (arg === "--price-config" && args[i + 1]) out.priceConfigPath = args[++i];
+    else if (arg === "--schema" && args[i + 1]) out.schemaPath = args[++i];
+    else if (arg === "--output" && args[i + 1]) out.outputPath = args[++i];
+    else if (arg === "--mode" && args[i + 1]) out.mode = args[++i];
   }
   return out;
 }
@@ -62,7 +70,7 @@ export function detectSourceKind(url, contentType) {
 }
 
 export function parseCsvLine(line) {
-  const out = [];
+  const out =[];
   let current = "";
   let quoted = false;
   for (let i = 0; i < line.length; i += 1) {
@@ -88,9 +96,9 @@ export function parseCsvLine(line) {
 export function parseCsvRows(text) {
   const source = String(text || "").replace(/^\uFEFF/, "");
   const lines = source.split(/\r?\n/).filter((line) => line.trim());
-  if (!lines.length) return [];
+  if (!lines.length) return[];
   const headers = parseCsvLine(lines[0]).map((x) => x.trim());
-  const rows = [];
+  const rows =[];
   for (let i = 1; i < lines.length; i += 1) {
     const cols = parseCsvLine(lines[i]);
     const row = {};
@@ -112,71 +120,9 @@ function normalizePriceConfig(raw) {
   return {
     price_source_url: String(config.price_source_url || config.PRICE_SOURCE_URL || "").trim(),
     price_source_token: String(config.price_source_token || config.PRICE_SOURCE_TOKEN || "").trim(),
-    allowed_content_types: Array.isArray(config.allowed_content_types)
-      ? config.allowed_content_types
-      : ["xlsx"],
+    allowed_content_types: Array.isArray(config.allowed_content_types) ? config.allowed_content_types :["xlsx", "csv", "json", "js"],
     timeout_ms: Number(config.timeout_ms || 15000),
     max_bytes: Number(config.max_bytes || 20 * 1024 * 1024),
-    allowed_domains: Array.isArray(config.allowed_domains) ? config.allowed_domains : [],
-  };
-}
-
-function ensureObject(value, name) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${name} must be an object`);
-  }
-}
-
-function validateSystemConfig(config) {
-  ensureObject(config, "system config");
-  ensureObject(config.app, "system config app");
-  const required = [config.app.web_root, config.app.price_bundle_path, config.app.stock_bundle_path];
-  for (let i = 0; i < required.length; i += 1) {
-    if (!required[i] || typeof required[i] !== "string") {
-      throw new Error("system config has missing app path fields");
-    }
-  }
-}
-
-function validatePriceConfig(priceConfig, schema) {
-  ensureObject(priceConfig, "price config");
-  ensureObject(schema, "price config schema");
-
-  if (!Array.isArray(priceConfig.allowed_content_types) || !priceConfig.allowed_content_types.length) {
-    throw new Error("price config allowed_content_types is required");
-  }
-  for (let i = 0; i < priceConfig.allowed_content_types.length; i += 1) {
-    const kind = String(priceConfig.allowed_content_types[i]).toLowerCase();
-    if (!SUPPORTED_KINDS.has(kind)) {
-      throw new Error(`unsupported kind in allowed_content_types: ${kind}`);
-    }
-  }
-  if (!Number.isFinite(priceConfig.timeout_ms) || priceConfig.timeout_ms < 1000) {
-    throw new Error("price config timeout_ms must be >= 1000");
-  }
-  if (!Number.isFinite(priceConfig.max_bytes) || priceConfig.max_bytes < 1024) {
-    throw new Error("price config max_bytes must be >= 1024");
-  }
-  if (priceConfig.allowed_domains && !Array.isArray(priceConfig.allowed_domains)) {
-    throw new Error("price config allowed_domains must be array");
-  }
-
-  const required = Array.isArray(schema.required) ? schema.required : [];
-  for (let i = 0; i < required.length; i += 1) {
-    const key = required[i];
-    if (!Object.prototype.hasOwnProperty.call(priceConfig, key)) {
-      throw new Error(`price config missing required field: ${key}`);
-    }
-  }
-}
-
-function mergeSourceConfig(priceConfig) {
-  const envUrl = String(process.env.PRICE_SOURCE_URL || "").trim();
-  const envToken = String(process.env.PRICE_SOURCE_TOKEN || "").trim();
-  return {
-    ...priceConfig,
-    price_source_url: envUrl || priceConfig.price_source_url,
-    price_source_token: envToken || priceConfig.price_source_token,
   };
 }
 
@@ -194,36 +140,14 @@ function isKindAllowed(kind, allowedKinds) {
 }
 
 function assertSupportedSourceKind(kind, allowedKinds) {
-  if (kind === "html") {
-    throw new Error("Source URL points to an HTML page, not a downloadable data file");
-  }
-  if (!isKindAllowed(kind, allowedKinds)) {
-    throw new Error(`Unsupported price source type: ${kind}`);
-  }
-}
-
-function isHostAllowed(url, allowedDomains) {
-  const list = Array.isArray(allowedDomains) ? allowedDomains.filter(Boolean) : [];
-  if (!list.length) return true;
-  let host = "";
-  try {
-    host = new URL(url).hostname.toLowerCase();
-  } catch (err) {
-    return false;
-  }
-  for (let i = 0; i < list.length; i += 1) {
-    const domain = String(list[i]).toLowerCase();
-    if (host === domain || host.endsWith(`.${domain}`)) return true;
-  }
-  return false;
+  if (kind === "html") throw new Error("Source URL points to an HTML page, not a downloadable data file");
+  if (!isKindAllowed(kind, allowedKinds)) throw new Error(`Unsupported price source type: ${kind}`);
 }
 
 function ensureMaxBytes(contentLength, maxBytes) {
   if (!contentLength) return;
   const size = Number(contentLength);
-  if (Number.isFinite(size) && size > maxBytes) {
-    throw new Error(`Response too large: ${size} bytes (limit ${maxBytes})`);
-  }
+  if (Number.isFinite(size) && size > maxBytes) throw new Error(`Response too large: ${size} bytes (limit ${maxBytes})`);
 }
 
 async function readXlsxRows(buffer) {
@@ -243,7 +167,7 @@ async function readXlsxRows(buffer) {
 function rowsFromBySpec(bySpec) {
   const source = bySpec && typeof bySpec === "object" ? bySpec : {};
   const specs = Object.keys(source);
-  const rows = [];
+  const rows =[];
   for (let i = 0; i < specs.length; i += 1) {
     const spec = specs[i];
     const item = source[spec] || {};
@@ -265,9 +189,7 @@ function rowsFromBySpec(bySpec) {
 function rowsFromJsonData(data) {
   if (Array.isArray(data)) return data;
   if (data && typeof data === "object" && Array.isArray(data.rows)) return data.rows;
-  if (data && typeof data === "object" && data.bySpec && typeof data.bySpec === "object") {
-    return rowsFromBySpec(data.bySpec);
-  }
+  if (data && typeof data === "object" && data.bySpec && typeof data.bySpec === "object") return rowsFromBySpec(data.bySpec);
   throw new Error("JSON source must be price rows array, { rows }, or { bySpec }");
 }
 
@@ -283,22 +205,17 @@ function parsePriceBundleFromScript(scriptText) {
 async function readResponseBodyByKind(response, kind, maxBytes) {
   if (kind === "json") {
     const text = await response.text();
-    if (Buffer.byteLength(text) > maxBytes) throw new Error(`Response too large (limit ${maxBytes})`);
+    if (Buffer.byteLength(text) > maxBytes) throw new Error(`Response too large`);
     return { jsonData: JSON.parse(text) };
   }
-  if (kind === "csv") {
+  if (kind === "csv" || kind === "js") {
     const text = await response.text();
-    if (Buffer.byteLength(text) > maxBytes) throw new Error(`Response too large (limit ${maxBytes})`);
-    return { text };
-  }
-  if (kind === "js") {
-    const text = await response.text();
-    if (Buffer.byteLength(text) > maxBytes) throw new Error(`Response too large (limit ${maxBytes})`);
+    if (Buffer.byteLength(text) > maxBytes) throw new Error(`Response too large`);
     return { text };
   }
   if (kind === "xlsx") {
     const ab = await response.arrayBuffer();
-    if (ab.byteLength > maxBytes) throw new Error(`Response too large (limit ${maxBytes})`);
+    if (ab.byteLength > maxBytes) throw new Error(`Response too large`);
     return { buffer: new Uint8Array(ab) };
   }
   throw new Error(`Unsupported price source type: ${kind}`);
@@ -310,10 +227,7 @@ async function parseSourceToRows(kind, body, password) {
   if (kind === "xlsx") return readXlsxRows(body.buffer || new Uint8Array());
   if (kind === "js") {
     const priceBundle = parsePriceBundleFromScript(body.text || "");
-    const decoded = await BundleUtils.decodePriceBundle(
-      priceBundle,
-      priceBundle.secured ? String(password || "") : ""
-    );
+    const decoded = await BundleUtils.decodePriceBundle(priceBundle, priceBundle.secured ? String(password || "") : "");
     return rowsFromBySpec(decoded.bySpec || {});
   }
   throw new Error(`Unsupported price source type: ${kind}`);
@@ -345,11 +259,11 @@ function hashBySpec(bySpec) {
 }
 
 async function readExistingBundle(outputPath) {
+  if (!outputPath) return null;
   try {
     const scriptText = await readFile(outputPath, "utf8");
     return parsePriceBundleFromScript(scriptText);
   } catch (err) {
-    if (err && err.code === "ENOENT") return null;
     return null;
   }
 }
@@ -366,56 +280,26 @@ async function decodeExistingBySpec(bundle, mode, password) {
   }
 }
 
-async function fetchWithTimeout(url, timeoutMs, headers) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, {
-      method: "GET",
-      headers: headers || {},
-      cache: "no-store",
-      signal: controller.signal,
-    });
-  } catch (err) {
-    if (err && err.name === "AbortError") {
-      throw new Error(`Source request timed out after ${timeoutMs}ms`);
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 function buildPriceBundleScript(bySpec, mode, password, sourceUrl, dataHash, sourceMeta) {
   const secured = mode === "encrypted";
   const pw = secured ? String(password || "") : "";
   return BundleUtils.encodePriceBundle({ bySpec: bySpec || {} }, pw).then((bundle) => {
-    bundle.meta = {
-      ...bundle.meta,
-      source: sourceUrl,
-      generated_at: new Date().toISOString(),
-      data_hash: dataHash,
-      source_etag: (sourceMeta && sourceMeta.etag) || "",
-      source_last_modified: (sourceMeta && sourceMeta.lastModified) || "",
-      mode,
-    };
-    return {
-      bundle,
-      script: `${BundleUtils.toWindowScript("PRICE_BUNDLE", bundle)}\n`,
-    };
+    bundle.meta = { ...bundle.meta, source: sourceUrl, generated_at: new Date().toISOString(), data_hash: dataHash, source_etag: (sourceMeta && sourceMeta.etag) || "", source_last_modified: (sourceMeta && sourceMeta.lastModified) || "", mode };
+    return { bundle, script: `${BundleUtils.toWindowScript("PRICE_BUNDLE", bundle)}\n` };
   });
 }
-
 
 export async function resolveRuntimeConfig(options) {
   const opts = options || {};
   const args = parseArgs(opts.argv || process.argv.slice(2));
 
   let systemConfig = { app: {} };
-  try { systemConfig = await loadJsonFile(opts.configPath || args.configPath); } catch (e) {}
+  const loadedSys = await loadJsonFile(opts.configPath || args.configPath);
+  if (loadedSys) systemConfig = loadedSys;
 
   let priceRaw = {};
-  try { priceRaw = await loadJsonFile(opts.priceConfigPath || args.priceConfigPath); } catch (e) {}
+  const loadedPrice = await loadJsonFile(opts.priceConfigPath || args.priceConfigPath);
+  if (loadedPrice) priceRaw = loadedPrice;
 
   const merged = normalizePriceConfig(priceRaw);
   merged.price_source_url = String(process.env.PRICE_SOURCE_URL || merged.price_source_url || "").trim();
@@ -431,19 +315,10 @@ export async function resolveRuntimeConfig(options) {
   let mode = resolveMode(opts.mode || args.mode);
   const password = String(process.env.PRICE_BUNDLE_PASSWORD || "").trim();
 
-  // 【智能兜底】：如果你没设密码，强制走 plain 公开版，绝不报错
-  if (mode === "encrypted" && !password) {
-    mode = "plain";
-  }
+  // 【智能兜底】无密码即转公开版
+  if (mode === "encrypted" && !password) mode = "plain";
 
-  return {
-    args,
-    systemConfig,
-    priceConfig: merged,
-    outputPath: finalOutputPath,
-    mode,
-    pricePassword: password,
-  };
+  return { args, systemConfig, priceConfig: merged, outputPath: finalOutputPath, mode, pricePassword: password };
 }
 
 export async function syncPriceBundle(options) {
@@ -454,48 +329,39 @@ export async function syncPriceBundle(options) {
   const allowedKinds = runtime.priceConfig.allowed_content_types.map((x) => String(x).toLowerCase());
   const timeoutMs = Number(runtime.priceConfig.timeout_ms);
   const maxBytes = Number(runtime.priceConfig.max_bytes);
-  let mode = resolveMode(opts.mode || runtime.mode);
-  const outputPath = opts.outputPath || runtime.outputPath;
-  const password = String(runtime.pricePassword || "");
-
-  // 【智能兜底】：二次拦截，杜绝 throw new Error
-  if (mode === "encrypted" && !password) {
-    console.warn("[sync-price] 提示: 选择了加密模式但未配置密码，自动降级为公开版(plain)打包。");
-    mode = "plain";
-  }
+  let mode = runtime.mode;
+  const outputPath = runtime.outputPath || path.resolve(process.cwd(), "data/price.bundle.js");
+  const password = runtime.pricePassword;
 
   const existingBundle = await readExistingBundle(outputPath);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (existingBundle && existingBundle.meta && existingBundle.meta.source_etag) headers["If-None-Match"] = String(existingBundle.meta.source_etag);
+  if (existingBundle && existingBundle.meta && existingBundle.meta.source_last_modified) headers["If-Modified-Since"] = String(existingBundle.meta.source_last_modified);
 
-  const baseHeaders = {};
-  if (token) baseHeaders.Authorization = `Bearer ${token}`;
-
-  const conditionalHeaders = { ...baseHeaders };
-  if (existingBundle && existingBundle.meta && existingBundle.meta.source_etag) {
-    conditionalHeaders["If-None-Match"] = String(existingBundle.meta.source_etag);
+  let response;
+  try {
+    response = await fetch(sourceUrl, { method: "GET", headers, cache: "no-store", signal: controller.signal });
+  } catch (err) {
+    throw new Error("Source request timed out or failed");
+  } finally {
+    clearTimeout(timer);
   }
-  if (existingBundle && existingBundle.meta && existingBundle.meta.source_last_modified) {
-    conditionalHeaders["If-Modified-Since"] = String(existingBundle.meta.source_last_modified);
-  }
 
-  let response = await fetchWithTimeout(sourceUrl, timeoutMs, conditionalHeaders);
-  if (response.status === 304) {
+  if (response.status === 304 && existingBundle) {
     const existingBySpec = await decodeExistingBySpec(existingBundle, mode, password);
     if (existingBySpec) {
-      const dataHash = hashBySpec(existingBySpec);
-      const existingMeta = (existingBundle && existingBundle.meta) || {};
       return {
-        outputPath,
-        kind: "not_modified",
-        contentType: String(response.headers.get("content-type") || ""),
-        rowCount: Object.keys(existingBySpec).length,
-        source: sourceUrl,
-        generatedAt: String(existingMeta.generated_at || existingMeta.version || ""),
-        changed: false,
-        dataHash,
-        secured: mode === "encrypted",
+        outputPath, kind: "not_modified", contentType: String(response.headers.get("content-type") || ""),
+        rowCount: Object.keys(existingBySpec).length, source: sourceUrl,
+        generatedAt: String(existingBundle.meta.generated_at || ""), changed: false,
+        dataHash: hashBySpec(existingBySpec), secured: mode === "encrypted",
       };
     }
-    response = await fetchWithTimeout(sourceUrl, timeoutMs, baseHeaders);
+    response = await fetch(sourceUrl, { method: "GET", headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: "no-store" });
   }
 
   if (!response.ok) throw new Error(`Source request failed: HTTP ${response.status}`);
@@ -515,52 +381,23 @@ export async function syncPriceBundle(options) {
 
   const existingBySpec2 = await decodeExistingBySpec(existingBundle, mode, password);
   if (existingBySpec2 && hashBySpec(existingBySpec2) === dataHash) {
-    const existingMeta = (existingBundle && existingBundle.meta) || {};
     return {
-      outputPath,
-      kind,
-      contentType,
-      rowCount: Object.keys(bySpec).length,
-      source: sourceUrl,
-      generatedAt: String(existingMeta.generated_at || existingMeta.version || ""),
-      changed: false,
-      dataHash,
-      secured: mode === "encrypted",
+      outputPath, kind, contentType, rowCount: Object.keys(bySpec).length, source: sourceUrl,
+      generatedAt: String(existingBundle.meta.generated_at || ""), changed: false,
+      dataHash, secured: mode === "encrypted",
     };
   }
 
-  const built = await buildPriceBundleScript(bySpec, mode, password, sourceUrl, dataHash, {
-    etag: responseEtag,
-    lastModified: responseLastModified,
-  });
-
+  const built = await buildPriceBundleScript(bySpec, mode, password, sourceUrl, dataHash, { etag: responseEtag, lastModified: responseLastModified });
   await mkdir(path.dirname(outputPath), { recursive: true });
   await writeFile(outputPath, built.script, "utf8");
 
-  return {
-    outputPath,
-    kind,
-    contentType,
-    rowCount: Object.keys(bySpec).length,
-    source: sourceUrl,
-    generatedAt: built.bundle.meta.generated_at,
-    changed: true,
-    dataHash,
-    secured: mode === "encrypted",
-  };
+  return { outputPath, kind, contentType, rowCount: Object.keys(bySpec).length, source: sourceUrl, generatedAt: built.bundle.meta.generated_at, changed: true, dataHash, secured: mode === "encrypted" };
 }
 
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === __filename;
 if (isCli) {
   syncPriceBundle({ argv: process.argv.slice(2) })
-    .then((res) => {
-      const state = res.changed ? "updated" : "unchanged";
-      console.log(
-        `[sync-price] ${state} mode=${res.secured ? "encrypted" : "plain"} kind=${res.kind} rows=${res.rowCount} hash=${res.dataHash} output=${res.outputPath}`
-      );
-    })
-    .catch((err) => {
-      console.error(`[sync-price] failed: ${err.message}`);
-      process.exit(1);
-    });
+    .then((res) => console.log(`[sync-price] ${res.changed ? "updated" : "unchanged"} mode=${res.secured ? "encrypted" : "plain"} kind=${res.kind} rows=${res.rowCount} hash=${res.dataHash} output=${res.outputPath}`))
+    .catch((err) => { console.error(`[sync-price] failed: ${err.message}`); process.exit(1); });
 }

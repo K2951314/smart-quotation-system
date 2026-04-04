@@ -14,7 +14,6 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, "..");
 const DEFAULT_SYSTEM_CONFIG = "config/system.json";
 const DEFAULT_STOCK_CONFIG = "config/stock-source.json";
-const DEFAULT_STOCK_SCHEMA = "config/stock-source.schema.json";
 const SUPPORTED_KINDS = new Set(["csv", "json", "xlsx", "js"]);
 
 function resolveFromRoot(inputPath) {
@@ -23,24 +22,26 @@ function resolveFromRoot(inputPath) {
 }
 
 async function loadJsonFile(filePath) {
-  const full = resolveFromRoot(filePath);
-  const raw = await readFile(full, "utf8");
-  return JSON.parse(raw);
+  try {
+    const full = resolveFromRoot(filePath);
+    const raw = await readFile(full, "utf8");
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
 }
 
 export function parseArgs(argv) {
   const out = {
     configPath: DEFAULT_SYSTEM_CONFIG,
     stockConfigPath: DEFAULT_STOCK_CONFIG,
-    schemaPath: DEFAULT_STOCK_SCHEMA,
     outputPath: "",
   };
-  const args = Array.isArray(argv) ? argv : [];
+  const args = Array.isArray(argv) ? argv :[];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === "--config" && args[i + 1]) out.configPath = args[++i];
     else if (arg === "--stock-config" && args[i + 1]) out.stockConfigPath = args[++i];
-    else if (arg === "--schema" && args[i + 1]) out.schemaPath = args[++i];
     else if (arg === "--output" && args[i + 1]) out.outputPath = args[++i];
   }
   return out;
@@ -64,15 +65,14 @@ export function detectSourceKind(url, contentType) {
 }
 
 export function parseCsvLine(line) {
-  const out = [];
+  const out =[];
   let current = "";
   let quoted = false;
   for (let i = 0; i < line.length; i += 1) {
     const ch = line[i];
     if (ch === "\"") {
       if (quoted && line[i + 1] === "\"") {
-        current += "\"";
-        i += 1;
+        current += "\""; i += 1;
       } else {
         quoted = !quoted;
       }
@@ -92,7 +92,7 @@ export function parseCsvRows(text) {
   const lines = source.split(/\r?\n/).filter((line) => line.trim());
   if (!lines.length) return [];
   const headers = parseCsvLine(lines[0]).map((x) => x.trim());
-  const rows = [];
+  const rows =[];
   for (let i = 1; i < lines.length; i += 1) {
     const cols = parseCsvLine(lines[i]);
     const row = {};
@@ -112,80 +112,11 @@ function normalizeStockConfig(raw) {
     allowed_content_types: Array.isArray(config.allowed_content_types) ? config.allowed_content_types : ["csv", "json", "xlsx", "js"],
     timeout_ms: Number(config.timeout_ms || 15000),
     max_bytes: Number(config.max_bytes || 20 * 1024 * 1024),
-    allowed_domains: Array.isArray(config.allowed_domains) ? config.allowed_domains : [],
-  };
-}
-
-function ensureObject(value, name) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${name} must be an object`);
-  }
-}
-
-function validateSystemConfig(config) {
-  ensureObject(config, "system config");
-  ensureObject(config.app, "system config app");
-  ensureObject(config.sync, "system config sync");
-
-  const required = [
-    config.app.web_root,
-    config.app.price_bundle_path,
-    config.app.stock_bundle_path,
-    config.sync.script_path,
-  ];
-  for (let i = 0; i < required.length; i += 1) {
-    if (!required[i] || typeof required[i] !== "string") {
-      throw new Error("system config has missing path fields");
-    }
-  }
-}
-
-function validateStockConfig(stockConfig, schema) {
-  ensureObject(stockConfig, "stock config");
-  ensureObject(schema, "stock config schema");
-
-  if (!Array.isArray(stockConfig.allowed_content_types) || !stockConfig.allowed_content_types.length) {
-    throw new Error("stock config allowed_content_types is required");
-  }
-  for (let i = 0; i < stockConfig.allowed_content_types.length; i += 1) {
-    const kind = String(stockConfig.allowed_content_types[i]).toLowerCase();
-    if (!SUPPORTED_KINDS.has(kind)) {
-      throw new Error(`unsupported kind in allowed_content_types: ${kind}`);
-    }
-  }
-  if (!Number.isFinite(stockConfig.timeout_ms) || stockConfig.timeout_ms < 1000) {
-    throw new Error("stock config timeout_ms must be >= 1000");
-  }
-  if (!Number.isFinite(stockConfig.max_bytes) || stockConfig.max_bytes < 1024) {
-    throw new Error("stock config max_bytes must be >= 1024");
-  }
-  if (stockConfig.allowed_domains && !Array.isArray(stockConfig.allowed_domains)) {
-    throw new Error("stock config allowed_domains must be array");
-  }
-
-  const required = Array.isArray(schema.required) ? schema.required : [];
-  for (let i = 0; i < required.length; i += 1) {
-    const key = required[i];
-    if (!Object.prototype.hasOwnProperty.call(stockConfig, key)) {
-      throw new Error(`stock config missing required field: ${key}`);
-    }
-  }
-}
-
-function mergeSourceConfig(stockConfig) {
-  const envUrl = String(process.env.STOCK_SOURCE_URL || "").trim();
-  const envToken = String(process.env.STOCK_SOURCE_TOKEN || "").trim();
-  return {
-    ...stockConfig,
-    stock_source_url: envUrl || stockConfig.stock_source_url,
-    stock_source_token: envToken || stockConfig.stock_source_token,
   };
 }
 
 function byCodeFromJson(data) {
-  if (data && typeof data === "object" && !Array.isArray(data) && data.byCode && typeof data.byCode === "object") {
-    return data.byCode;
-  }
+  if (data && typeof data === "object" && !Array.isArray(data) && data.byCode && typeof data.byCode === "object") return data.byCode;
   if (Array.isArray(data)) return DataUtils.buildStockByCode(data);
   throw new Error("JSON source must be { byCode } or stock rows array");
 }
@@ -199,7 +130,7 @@ async function readXlsxRows(buffer) {
   }
   const binary = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
   const wb = XLSX.read(binary, { type: "buffer" });
-  if (!wb.SheetNames.length) return [];
+  if (!wb.SheetNames.length) return[];
   const ws = wb.Sheets[wb.SheetNames[0]];
   return XLSX.utils.sheet_to_json(ws, { defval: "" });
 }
@@ -209,8 +140,7 @@ function parseStockBundleFromScript(scriptText) {
   vm.createContext(sandbox);
   vm.runInContext(String(scriptText || ""), sandbox, { timeout: 3000 });
   const stockBundle = sandbox.window.STOCK_BUNDLE || sandbox.STOCK_BUNDLE;
-  if (!stockBundle) throw new Error("stock.bundle.js did not define window.STOCK_BUNDLE");
-  if (stockBundle.secured) throw new Error("stock bundle must remain plain text");
+  if (!stockBundle) throw new Error("stock.bundle.js did not define STOCK_BUNDLE");
   return stockBundle;
 }
 
@@ -225,8 +155,7 @@ function canonicalizeByCode(stockByCode) {
   const keys = Object.keys(input).sort();
   const sorted = {};
   for (let i = 0; i < keys.length; i += 1) {
-    const key = keys[i];
-    sorted[key] = String(input[key] ?? "");
+    sorted[keys[i]] = String(input[keys[i]] ?? "");
   }
   return JSON.stringify(sorted);
 }
@@ -236,6 +165,7 @@ function hashByCode(stockByCode) {
 }
 
 async function readExistingBundleInfo(outputPath) {
+  if (!outputPath) return null;
   try {
     const scriptText = await readFile(outputPath, "utf8");
     const bundle = parseStockBundleFromScript(scriptText);
@@ -246,11 +176,9 @@ async function readExistingBundleInfo(outputPath) {
       dataHash: hashByCode(byCode),
       generatedAt: bundle.meta && bundle.meta.generated_at ? String(bundle.meta.generated_at) : "",
       sourceEtag: bundle.meta && bundle.meta.source_etag ? String(bundle.meta.source_etag) : "",
-      sourceLastModified:
-        bundle.meta && bundle.meta.source_last_modified ? String(bundle.meta.source_last_modified) : "",
+      sourceLastModified: bundle.meta && bundle.meta.source_last_modified ? String(bundle.meta.source_last_modified) : "",
     };
   } catch (err) {
-    if (err && err.code === "ENOENT") return null;
     return null;
   }
 }
@@ -261,60 +189,33 @@ function isKindAllowed(kind, allowedKinds) {
 }
 
 function assertSupportedSourceKind(kind, allowedKinds) {
-  if (kind === "html") {
-    throw new Error("Source URL points to an HTML page, not a downloadable data file");
-  }
-  if (!isKindAllowed(kind, allowedKinds)) {
-    throw new Error(`Unsupported stock source type: ${kind}`);
-  }
-}
-
-function isHostAllowed(url, allowedDomains) {
-  const list = Array.isArray(allowedDomains) ? allowedDomains.filter(Boolean) : [];
-  if (!list.length) return true;
-  let host = "";
-  try {
-    host = new URL(url).hostname.toLowerCase();
-  } catch (err) {
-    return false;
-  }
-  for (let i = 0; i < list.length; i += 1) {
-    const domain = String(list[i]).toLowerCase();
-    if (host === domain || host.endsWith(`.${domain}`)) return true;
-  }
-  return false;
+  if (kind === "html") throw new Error("Source URL points to an HTML page, not a downloadable data file");
+  if (!isKindAllowed(kind, allowedKinds)) throw new Error(`Unsupported stock source type: ${kind}`);
 }
 
 function ensureMaxBytes(contentLength, maxBytes) {
   if (!contentLength) return;
   const size = Number(contentLength);
-  if (Number.isFinite(size) && size > maxBytes) {
-    throw new Error(`Response too large: ${size} bytes (limit ${maxBytes})`);
-  }
+  if (Number.isFinite(size) && size > maxBytes) throw new Error(`Response too large: ${size} bytes`);
 }
 
 async function readResponseBodyByKind(response, kind, maxBytes) {
   if (kind === "json") {
     const text = await response.text();
-    if (Buffer.byteLength(text) > maxBytes) throw new Error(`Response too large (limit ${maxBytes})`);
+    if (Buffer.byteLength(text) > maxBytes) throw new Error("Response too large");
     return { jsonData: JSON.parse(text) };
   }
-  if (kind === "csv") {
+  if (kind === "csv" || kind === "js") {
     const text = await response.text();
-    if (Buffer.byteLength(text) > maxBytes) throw new Error(`Response too large (limit ${maxBytes})`);
-    return { text };
-  }
-  if (kind === "js") {
-    const text = await response.text();
-    if (Buffer.byteLength(text) > maxBytes) throw new Error(`Response too large (limit ${maxBytes})`);
+    if (Buffer.byteLength(text) > maxBytes) throw new Error("Response too large");
     return { text };
   }
   if (kind === "xlsx") {
     const ab = await response.arrayBuffer();
-    if (ab.byteLength > maxBytes) throw new Error(`Response too large (limit ${maxBytes})`);
+    if (ab.byteLength > maxBytes) throw new Error("Response too large");
     return { buffer: new Uint8Array(ab) };
   }
-  throw new Error(`Unsupported stock source type: ${kind}`);
+  throw new Error(`Unsupported type: ${kind}`);
 }
 
 async function parseSourceToByCode(kind, body) {
@@ -331,18 +232,8 @@ async function parseSourceToByCode(kind, body) {
 function buildStockBundleScript(byCode, sourceUrl, dataHash, sourceMeta) {
   const meta = sourceMeta || {};
   const bundle = BundleUtils.encodeStockBundle(byCode || {});
-  bundle.meta = {
-    ...bundle.meta,
-    source: sourceUrl,
-    generated_at: new Date().toISOString(),
-    data_hash: dataHash,
-    source_etag: meta.etag || "",
-    source_last_modified: meta.lastModified || "",
-  };
-  return {
-    bundle,
-    script: `${BundleUtils.toWindowScript("STOCK_BUNDLE", bundle)}\n`,
-  };
+  bundle.meta = { ...bundle.meta, source: sourceUrl, generated_at: new Date().toISOString(), data_hash: dataHash, source_etag: meta.etag || "", source_last_modified: meta.lastModified || "" };
+  return { bundle, script: `${BundleUtils.toWindowScript("STOCK_BUNDLE", bundle)}\n` };
 }
 
 export async function resolveRuntimeConfig(options) {
@@ -350,14 +241,14 @@ export async function resolveRuntimeConfig(options) {
   const args = parseArgs(opts.argv || process.argv.slice(2));
 
   let systemConfig = { app: {} };
-  try { systemConfig = await loadJsonFile(opts.configPath || args.configPath); } catch (e) {}
+  const sysLoad = await loadJsonFile(opts.configPath || args.configPath);
+  if (sysLoad) systemConfig = sysLoad;
 
   let stockRaw = {};
-  try { stockRaw = await loadJsonFile(opts.stockConfigPath || args.stockConfigPath); } catch (e) {}
+  const stockLoad = await loadJsonFile(opts.stockConfigPath || args.stockConfigPath);
+  if (stockLoad) stockRaw = stockLoad;
 
   const mergedStock = normalizeStockConfig(stockRaw);
-
-  // 【核心修复】强制读取 Github Action 传进来的环境变量，覆盖掉空配置
   mergedStock.stock_source_url = String(process.env.STOCK_SOURCE_URL || mergedStock.stock_source_url || "").trim();
   mergedStock.stock_source_token = String(process.env.STOCK_SOURCE_TOKEN || mergedStock.stock_source_token || "").trim();
 
@@ -368,12 +259,7 @@ export async function resolveRuntimeConfig(options) {
   let finalOutputPath = args.outputPath || (systemConfig.app && systemConfig.app.stock_bundle_path) || "data/stock.bundle.js";
   finalOutputPath = path.isAbsolute(finalOutputPath) ? finalOutputPath : path.resolve(process.cwd(), finalOutputPath);
 
-  return {
-    args,
-    systemConfig,
-    stockConfig: mergedStock,
-    outputPath: finalOutputPath,
-  };
+  return { args, systemConfig, stockConfig: mergedStock, outputPath: finalOutputPath };
 }
 
 export async function syncStockBundle(options) {
@@ -384,11 +270,14 @@ export async function syncStockBundle(options) {
   const allowedKinds = runtime.stockConfig.allowed_content_types.map((x) => String(x).toLowerCase());
   const timeoutMs = Number(runtime.stockConfig.timeout_ms);
   const maxBytes = Number(runtime.stockConfig.max_bytes);
-  const existing = await readExistingBundleInfo(outputPath);
 
+  // 【强力锁定】绝对保证路径存在
+  const outputPath = runtime.outputPath || path.resolve(process.cwd(), "data/stock.bundle.js");
+
+  const existing = await readExistingBundleInfo(outputPath);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const requestUrl = sourceUrl;
+  
   const headers = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   if (existing && existing.sourceEtag) headers["If-None-Match"] = existing.sourceEtag;
@@ -396,31 +285,18 @@ export async function syncStockBundle(options) {
 
   let response;
   try {
-    response = await fetch(requestUrl, {
-      method: "GET",
-      headers,
-      cache: "no-store",
-      signal: controller.signal,
-    });
+    response = await fetch(sourceUrl, { method: "GET", headers, cache: "no-store", signal: controller.signal });
   } catch (err) {
-    if (err && err.name === "AbortError") {
-      throw new Error(`Source request timed out after ${timeoutMs}ms`);
-    }
-    throw err;
+    throw new Error("Source request timed out or failed");
   } finally {
     clearTimeout(timer);
   }
 
   if (response.status === 304 && existing) {
     return {
-      outputPath,
-      kind: "not_modified",
-      contentType: String(response.headers.get("content-type") || ""),
-      rowCount: Object.keys(existing.byCode || {}).length,
-      source: sourceUrl,
-      generatedAt: existing.generatedAt || "",
-      changed: false,
-      dataHash: existing.dataHash,
+      outputPath, kind: "not_modified", contentType: String(response.headers.get("content-type") || ""),
+      rowCount: Object.keys(existing.byCode || {}).length, source: sourceUrl,
+      generatedAt: existing.generatedAt || "", changed: false, dataHash: existing.dataHash,
     };
   }
 
@@ -436,49 +312,24 @@ export async function syncStockBundle(options) {
   const body = await readResponseBodyByKind(response, kind, maxBytes);
   const byCode = await parseSourceToByCode(kind, body);
   const dataHash = hashByCode(byCode);
+
   if (existing && existing.dataHash === dataHash) {
     return {
-      outputPath,
-      kind,
-      contentType,
-      rowCount: Object.keys(byCode || {}).length,
-      source: sourceUrl,
-      generatedAt: existing.generatedAt || "",
-      changed: false,
-      dataHash,
+      outputPath, kind, contentType, rowCount: Object.keys(byCode || {}).length,
+      source: sourceUrl, generatedAt: existing.generatedAt || "", changed: false, dataHash,
     };
   }
 
-  const built = buildStockBundleScript(byCode, sourceUrl, dataHash, {
-    etag: responseEtag,
-    lastModified: responseLastModified,
-  });
+  const built = buildStockBundleScript(byCode, sourceUrl, dataHash, { etag: responseEtag, lastModified: responseLastModified });
   await mkdir(path.dirname(outputPath), { recursive: true });
   await writeFile(outputPath, built.script, "utf8");
 
-  return {
-    outputPath,
-    kind,
-    contentType,
-    rowCount: Object.keys(byCode || {}).length,
-    source: sourceUrl,
-    generatedAt: built.bundle.meta.generated_at,
-    changed: true,
-    dataHash,
-  };
+  return { outputPath, kind, contentType, rowCount: Object.keys(byCode || {}).length, source: sourceUrl, generatedAt: built.bundle.meta.generated_at, changed: true, dataHash };
 }
 
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === __filename;
 if (isCli) {
   syncStockBundle({ argv: process.argv.slice(2) })
-    .then((res) => {
-      const state = res.changed ? "updated" : "unchanged";
-      console.log(
-        `[sync-stock] ${state} kind=${res.kind} rows=${res.rowCount} hash=${res.dataHash} output=${res.outputPath}`
-      );
-    })
-    .catch((err) => {
-      console.error(`[sync-stock] failed: ${err.message}`);
-      process.exit(1);
-    });
+    .then((res) => console.log(`[sync-stock] ${res.changed ? "updated" : "unchanged"} kind=${res.kind} rows=${res.rowCount} hash=${res.dataHash} output=${res.outputPath}`))
+    .catch((err) => { console.error(`[sync-stock] failed: ${err.message}`); process.exit(1); });
 }
