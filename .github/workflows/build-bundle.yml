@@ -14,7 +14,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
-
+      - name: Debug env
+        run: |
+          echo $PRICE_SOURCE_URL
       - name: Checkout data
         uses: actions/checkout@v4
         with:
