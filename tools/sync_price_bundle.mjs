@@ -410,7 +410,6 @@ export async function resolveRuntimeConfig(options) {
   const opts = options || {};
   const args = parseArgs(opts.argv || process.argv.slice(2));
 
-  // 100% 兼容处理：即使没有 config 文件也不会报错
   let systemConfig = { app: {} };
   try { systemConfig = await loadJsonFile(opts.configPath || args.configPath); } catch (e) {}
 
@@ -419,11 +418,14 @@ export async function resolveRuntimeConfig(options) {
 
   const merged = normalizePriceConfig(priceRaw);
 
+  // 【核心修复】强制读取 Github Action 传进来的环境变量，覆盖掉空配置
+  merged.price_source_url = String(process.env.PRICE_SOURCE_URL || merged.price_source_url || "").trim();
+  merged.price_source_token = String(process.env.PRICE_SOURCE_TOKEN || merged.price_source_token || "").trim();
+
   if (!merged.price_source_url) {
     throw new Error("Missing price source URL (PRICE_SOURCE_URL secret is not set)");
   }
 
-  // 绝对安全的路径解析：优先命令行参数 -> 配置文件 -> 默认值
   let finalOutputPath = args.outputPath || (systemConfig.app && systemConfig.app.price_bundle_path) || "data/price.bundle.js";
   finalOutputPath = path.isAbsolute(finalOutputPath) ? finalOutputPath : path.resolve(process.cwd(), finalOutputPath);
 
@@ -439,7 +441,6 @@ export async function resolveRuntimeConfig(options) {
     pricePassword: password,
   };
 }
-
 export async function syncPriceBundle(options) {
   const opts = options || {};
   const runtime = opts.runtime || (await resolveRuntimeConfig(opts));

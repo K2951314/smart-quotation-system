@@ -357,6 +357,10 @@ export async function resolveRuntimeConfig(options) {
 
   const mergedStock = normalizeStockConfig(stockRaw);
 
+  // 【核心修复】强制读取 Github Action 传进来的环境变量，覆盖掉空配置
+  mergedStock.stock_source_url = String(process.env.STOCK_SOURCE_URL || mergedStock.stock_source_url || "").trim();
+  mergedStock.stock_source_token = String(process.env.STOCK_SOURCE_TOKEN || mergedStock.stock_source_token || "").trim();
+
   if (!mergedStock.stock_source_url) {
     throw new Error("Missing stock source URL (STOCK_SOURCE_URL secret is not set)");
   }
