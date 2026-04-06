@@ -289,33 +289,113 @@ async function decryptData(base64Data, password) {
   return new TextDecoder().decode(decrypted);
 }
 
-// 绝对干干净净、极致速度的镜像下载器 (利用浏览器 HTTP Etag 原生缓存机制，0 秒载入)
-async function fetchWithMirrors(filename, timeoutMs) {
-  const mirrors =[
-    `https://mirror.ghproxy.com/https://raw.githubusercontent.com/K2951314/smart-quotation-system/data/${filename}`,
-    `https://ghproxy.net/https://raw.githubusercontent.com/K2951314/smart-quotation-system/data/${filename}`,
-    `https://raw.githubusercontent.com/K2951314/smart-quotation-system/data/${filename}`
-  ];
+// ================== 新版 Supabase 缓存加载模块开始 ==================
+const SUPABASE_BASE_URL = "https://xnnolklpjentxhosetcd.supabase.co/storage/v1/object/public/quotation-data";
 
-  let lastError;
-  for (let i = 0; i < mirrors.length; i++) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      // 绝不可加 cache: "no-store"，让浏览器自己管理 304 缓存穿透，省去所有带宽
-      const response = await fetch(mirrors[i], { signal: controller.signal });
-      clearTimeout(timer);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return await response.text();
-    } catch (err) {
-      lastError = err;
-      console.warn(`[镜像节点 ${i + 1} 测速未达标]:`, err.message);
+async function loadDataWithCache() {
+  console.log("开始检查版本更新...");
+  const versionRes = await fetch(`${SUPABASE_BASE_URL}/version.json?t=${Date.now()}`);
+  const { version } = await versionRes.json();
+
+  await Promise.all([
+    fetchFileWithCache(`config.json`, version, 'json'),
+    fetchFileWithCache(`price.bundle.js`, version, 'js'),
+    fetchFileWithCache(`stock.bundle.js`, version, 'js')
+  ]);
+
+  console.log("✅ 数据与配置加载完毕，当前版本：", version);
+  
+  // ========================================================
+  // ⭐ 神奇的魔法：将云端 config.json 完美对接到你原有的系统中
+  // ========================================================
+  if (window.APP_CONFIG) {
+    // 1. 同步折扣到原项目的远程配置项
+    if (window.APP_CONFIG.discounts) {
+      applyRemoteDefaultDiscountConfig({
+        ex: window.APP_CONFIG.discounts["EX"],
+        osg: window.APP_CONFIG.discounts["OSG"],
+        mitsubishi: window.APP_CONFIG.discounts["三菱"],
+        other: window.APP_CONFIG.discounts["其他"]
+      });
+    }
+    // 2. 自动填入 取整阈值 和 小数位数 的输入框
+    if (window.APP_CONFIG.rounding_threshold !== undefined) {
+      const thresholdInput = document.getElementById("threshold");
+      if (thresholdInput) thresholdInput.value = window.APP_CONFIG.rounding_threshold;
+    }
+    if (window.APP_CONFIG.decimal_places !== undefined) {
+      const decimalsInput = document.getElementById("decimals");
+      if (decimalsInput) decimalsInput.value = window.APP_CONFIG.decimal_places;
+    }
+    // 3. 完美处理：自动勾选默认展示列
+    if (window.APP_CONFIG.default_checked && Array.isArray(window.APP_CONFIG.default_checked)) {
+      // 建立配置文字和 HTML id 的映射关系
+      const mapping = {
+        "代码": "chk_code",
+        "规格": "chk_spec",
+        "报价": "chk_price",
+        "特价": "chk_special",
+        "库存": "chk_stock",
+        "备注": "chk_remark"
+      };
+      
+      // 第一步：先将页面上的列全部取消勾选
+      Object.values(mapping).forEach(id => {
+        const chk = document.getElementById(id);
+        if (chk) chk.checked = false;
+      });
+      
+      // 第二步：根据云端配置，精准勾选需要的列
+      window.APP_CONFIG.default_checked.forEach(name => {
+        const id = mapping[name];
+        if (id) {
+          const chk = document.getElementById(id);
+          if (chk) chk.checked = true;
+        }
+      });
     }
   }
-  throw new Error(`所有加速节点均已失效: ${lastError.message}`);
 }
 
-// 抛除正则表达式，用最底层的 indexOf 定位 JSON 边界，解析时间从几十秒缩减为 1ms！
+async function fetchFileWithCache(filename, version, fileType) {
+  const cacheName = `quotation-cache-v1`; 
+  const fileUrl = `${SUPABASE_BASE_URL}/${filename}?v=${version}`;
+
+  const cache = await caches.open(cacheName);
+  let response = await cache.match(fileUrl);
+
+  if (!response) {
+    console.log(`[${filename}] 缓存未命中或版本更新，从 Supabase 下载...`);
+    response = await fetch(fileUrl);
+    if (response.ok) {
+      await cache.put(fileUrl, response.clone());
+      // 异步清理旧缓存，不阻塞流程
+      cleanOldCache(cache, filename, fileUrl);
+    } else {
+      throw new Error(`${filename} 下载失败`);
+    }
+  }
+
+  const text = await response.text();
+  if (fileType === 'json') {
+    window.APP_CONFIG = JSON.parse(text);
+  } else if (fileType === 'js') {
+    const script = document.createElement('script');
+    script.text = text;
+    document.body.appendChild(script);
+  }
+}
+
+async function cleanOldCache(cache, filename, currentUrl) {
+  const keys = await cache.keys();
+  for (let request of keys) {
+    if (request.url.includes(filename) && request.url !== currentUrl) {
+      await cache.delete(request);
+    }
+  }
+}
+// ================== 新版 Supabase 缓存加载模块结束 ==================
+
 function fastExtractJson(text) {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
@@ -326,7 +406,6 @@ function fastExtractJson(text) {
 async function parsePriceBundle(priceObj) {
   if (!priceObj) throw new Error("未找到远程价格包");
   let jsonText = "";
-
   if (priceObj.secured) {
     setStatus("价格包已加密，请输入密码", "lock");
     const pwd = prompt("请输入价格包密码：");
@@ -339,7 +418,6 @@ async function parsePriceBundle(priceObj) {
   } else {
     jsonText = decodePlainPayload(priceObj.payload || "");
   }
-
   const parsed = JSON.parse(jsonText || "{}");
   return { bySpec: parsed.bySpec || {}, meta: priceObj.meta || null };
 }
@@ -351,6 +429,7 @@ function parseStockBundle(stockObj) {
   return { byCode: parsed.byCode || {}, meta: stockObj.meta || null };
 }
 
+// 彻底重构的 ensureDataLoaded（将旧版的 fetchWithMirrors 摘除，接入了最新的缓存机制）
 async function ensureDataLoaded() {
   if (g_DataReady) return true;
   if (g_DataLoadingPromise) return g_DataLoadingPromise;
@@ -358,21 +437,19 @@ async function ensureDataLoaded() {
   g_DataLoadingPromise = (async () => {
     setSearchLoading(true);
     try {
+      setStatus("正连接 Supabase 极速节点...", "info");
+      
+      // 核心：强制在此处等待缓存拉取和注入完成！解决竞态崩溃问题！
+      await loadDataWithCache();
+
       let priceObj = window.PRICE_BUNDLE;
       let stockObj = window.STOCK_BUNDLE;
 
-      // 若未命中预留变量，则启动极速镜像下载
       if (!priceObj || !stockObj) {
-        setStatus("正连接极速节点同步庞大数据库...", "info");
-        const [priceText, stockText] = await Promise.all([
-          fetchWithMirrors("price.bundle.js", 15000),
-          fetchWithMirrors("stock.bundle.js", 15000)
-        ]);
-        
-        setStatus("秒级解构核心数据...", "info");
-        if (!priceObj) priceObj = fastExtractJson(priceText);
-        if (!stockObj) stockObj = fastExtractJson(stockText);
+         throw new Error("数据未能成功注入内存");
       }
+
+      setStatus("秒级解构核心数据...", "info");
 
       const parsedPrice = await parsePriceBundle(priceObj);
       const parsedStock = parseStockBundle(stockObj);
