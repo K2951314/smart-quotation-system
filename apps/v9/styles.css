@@ -2733,7 +2733,19 @@ body.has-overlay {
 }
 
 @media (max-width: 720px) {
+  .toolbar {
+    position: sticky;
+    top: calc(8px + env(safe-area-inset-top, 0px));
+    z-index: 32;
+  }
+
   .toolbar-actions {
+    position: static;
+    top: auto;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    z-index: auto;
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
@@ -2785,7 +2797,9 @@ body.has-overlay {
   }
 
   .query-panel {
-    top: calc(8px + var(--toolbar-stack-height) + 8px);
+    position: static;
+    top: auto;
+    z-index: auto;
   }
 
   .query-input {

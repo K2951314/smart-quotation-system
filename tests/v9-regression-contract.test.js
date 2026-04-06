@@ -79,6 +79,23 @@ test("mobile version bar stays on one line and scrolls horizontally", () => {
   );
 });
 
+test("mobile keeps the query console pinned instead of making the input panel sticky", () => {
+  const css = read("apps/v9/styles.css");
+
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*720px\)\s*\{[\s\S]*?\.toolbar\s*\{[^}]*position:\s*sticky;[^}]*top:\s*calc\(8px\s*\+\s*env\(safe-area-inset-top,\s*0px\)\);/s,
+  );
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*720px\)\s*\{[\s\S]*?\.toolbar-actions\s*\{[^}]*position:\s*static;[^}]*top:\s*auto;[^}]*z-index:\s*auto;/s,
+  );
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*720px\)\s*\{[\s\S]*?\.query-panel\s*\{[^}]*position:\s*static;[^}]*top:\s*auto;/,
+  );
+});
+
 test("frontend assets stay within CSP and avoid eval-based bundle parsing", () => {
   const css = read("apps/v9/styles.css");
   const app = read("apps/v9/app.js");
